@@ -12,10 +12,12 @@ export function computeStages(source: string, destination: string): string[] {
   return all.slice(0, destIdx + 1)
 }
 
+// Matches exactly prefix-YYMMDD to avoid accidentally deleting unrelated multidevs
 export function findByPrefix(list: string, prefix: string): string | null {
+  const re = new RegExp(`^${prefix}-\\d{6}$`)
   for (const line of list.split('\n')) {
     const trimmed = line.trim()
-    if (trimmed.startsWith(prefix)) return trimmed
+    if (re.test(trimmed)) return trimmed
   }
   return null
 }
