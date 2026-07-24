@@ -7,17 +7,21 @@ if ! command -v gh &> /dev/null; then
   exit 1
 fi
 
+# Must be on main
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  echo "Switch to main before shipping (currently on $CURRENT_BRANCH)."
+  exit 1
+fi
+
+# Sync main before branching
+git pull origin main --rebase 2>/dev/null || true
+
 # Check for any changes (modified, staged, or untracked)
 if [ -z "$(git status --porcelain)" ]; then
   echo "Nothing to commit."
   exit 0
 fi
-
-# Increment PR counter
-COUNTER_FILE=".pr-counter"
-CURRENT=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
-NEXT=$((CURRENT + 1))
-PR_BRANCH=$(printf "pr-%04d" $NEXT)
 
 # Prompt for commit message
 echo ""
@@ -28,15 +32,29 @@ if [ -z "$MSG" ]; then
   exit 1
 fi
 
-# Commit on current branch (main), then branch off
+# Determine next PR number
+COUNTER_FILE=".pr-counter"
+CURRENT=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
+NEXT=$((CURRENT + 1))
+PR_BRANCH=$(printf "pr-%04d" $NEXT)
+
+# Create PR branch from current main — do NOT commit to main
+git stash -u
+git checkout -b "$PR_BRANCH"
+git stash pop
+
+# Stage, commit, update counter — all on the PR branch
 git add -A
 git commit -m "$MSG"
 
-# Create PR branch from current state
-git checkout -b "$PR_BRANCH"
+echo "$NEXT" > "$COUNTER_FILE"
+git add "$COUNTER_FILE"
+git commit -m "chore: bump PR counter to $(printf '%04d' $NEXT)"
+
+# Push PR branch
 git push -u origin "$PR_BRANCH"
 
-# Create PR — requires approval via branch protection on main
+# Open PR
 gh pr create \
   --title "$(printf 'pr-%04d' $NEXT): $MSG" \
   --body "$(cat <<EOF
@@ -53,12 +71,6 @@ EOF
 )" \
   --base main \
   --head "$PR_BRANCH"
-
-# Update counter and commit it on the PR branch
-echo "$NEXT" > "$COUNTER_FILE"
-git add "$COUNTER_FILE"
-git commit -m "chore: bump PR counter to $(printf '%04d' $NEXT)"
-git push
 
 # Return to main
 git checkout main
