@@ -2,6 +2,8 @@
 
 A Next.js deployment console for pushing Pantheon multidev environments through the dev → test → live pipeline with real-time log streaming, per-stage approval gates, scheduled deployments, and full history via Supabase.
 
+**Live:** https://mu-deployment-production.up.railway.app
+
 ---
 
 ## Features
@@ -14,21 +16,23 @@ A Next.js deployment console for pushing Pantheon multidev environments through 
 - **Reconnect** — resume a live stream after a page refresh
 - **Scheduled deployments** — schedule future deployments with a default date computed as 3 business days from multidev creation
 - **Deployment history** — every run (including crashes) is recorded to Supabase with start/end timestamps and full log
-- **Local scheduler** — checks for due scheduled deployments every minute, auto-starts on page load
-- **GitHub Actions cron** — `POST /api/cron/trigger` is the production trigger endpoint
+- **Auto scheduler** — checks for due scheduled deployments every minute
 
 ---
 
-## Prerequisites
+## Running the app
 
+### Option A — Railway (recommended)
+
+The app is hosted at **https://mu-deployment-production.up.railway.app** and deploys automatically on every merge to `main`. No local setup required.
+
+### Option B — Local development
+
+**Prerequisites:**
 - Node.js 18+
 - [Terminus](https://pantheon.io/docs/terminus) installed and authenticated (`terminus auth:login`)
 - Git (for the multidev alignment check)
 - [Supabase](https://supabase.com) account (free tier) for history and scheduling
-
----
-
-## Setup
 
 ```bash
 git clone https://github.com/jraborar/mu-deployment.git
@@ -111,3 +115,4 @@ Requires [GitHub CLI](https://cli.github.com): `brew install gh && gh auth login
 - **Pantheon Terminus** — all deployment operations
 - **Supabase** — deployment history and scheduling
 - **Server-Sent Events** — real-time log streaming
+- **Railway** — production hosting via Docker
