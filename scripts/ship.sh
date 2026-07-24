@@ -7,8 +7,8 @@ if ! command -v gh &> /dev/null; then
   exit 1
 fi
 
-# Check for uncommitted changes
-if git diff --quiet && git diff --cached --quiet; then
+# Check for any changes (modified, staged, or untracked)
+if [ -z "$(git status --porcelain)" ]; then
   echo "Nothing to commit."
   exit 0
 fi
