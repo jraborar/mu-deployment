@@ -15,6 +15,7 @@ function stripAnsi(s: string): string {
 
 function isNoise(line: string): boolean {
   return /^\s*(Deprecated|Warning|Notice|PHP):/i.test(line)
+    || /^\d+\/\d+\s*\[/.test(line)  // terminus progress bars e.g. "4/19 [=====>---]"
 }
 
 export function run(cmd: string): Promise<RunResult> {
