@@ -96,6 +96,21 @@ export async function cancelSchedule(id: string): Promise<void> {
   await db.from('scheduled_deployments').update({ status: 'cancelled' }).eq('id', id)
 }
 
+// Marks any records stuck as 'running' from a crashed/restarted server instance as failed.
+// Safe to call on every startup — a running record with no in-memory counterpart is always orphaned.
+export async function cleanupStaleRunningRecords(): Promise<number> {
+  const db = getClient()
+  if (!db) return 0
+  const { data, error } = await db
+    .from('deployment_history')
+    .update({ status: 'failed', completed_at: new Date().toISOString() })
+    .eq('status', 'running')
+    .is('completed_at', null)
+    .select('id')
+  if (error) console.error('[supabase] cleanupStaleRunningRecords:', error.message)
+  return data?.length ?? 0
+}
+
 // Atomically claims due schedules — updates to 'triggered' and returns only
 // the rows this instance claimed, preventing double-firing across instances.
 export async function claimDueSchedules(): Promise<(ScheduleRecord & { id: string; status: string })[]> {

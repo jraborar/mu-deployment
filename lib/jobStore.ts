@@ -76,3 +76,7 @@ export function createJob(params: {
 export function getJob(id: string): Job | undefined {
   return store.get(id)
 }
+
+export function getAllJobs(): Job[] {
+  return [...store.values()]
+}
