@@ -11,12 +11,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen bg-pantheon-bg text-pantheon-text antialiased">
         <header className="border-b border-pantheon-border bg-pantheon-bg-card">
-          <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-4">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-pantheon-yellow">
-              <span className="font-mono text-xs font-black text-black">P</span>
+          <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-4">
+            <div className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded bg-pantheon-yellow flex items-center justify-center">
+                <span className="text-black font-bold text-xs tracking-tight">P</span>
+              </div>
+              <span className="font-semibold text-sm tracking-widest uppercase text-pantheon-text">
+                Pantheon
+              </span>
             </div>
-            <span className="font-mono text-sm font-semibold text-pantheon-text">
-              Pantheon MU Deployment
+            <span className="text-pantheon-border">|</span>
+            <span className="text-pantheon-text-muted text-sm tracking-wide">
+              MU Deployment
             </span>
           </div>
         </header>
