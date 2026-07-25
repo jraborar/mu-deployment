@@ -1,10 +1,12 @@
-import { getDueSchedules, markScheduleTriggered } from '@/lib/supabase'
+import { claimDueSchedules } from '@/lib/supabase'
 import { computeStages } from '@/lib/pipeline'
 import { createJob } from '@/lib/jobStore'
 import { executeJob } from '@/lib/deployer'
 
 export async function runDueSchedules(): Promise<{ triggered: number; skipped: number }> {
-  const due = await getDueSchedules()
+  // Atomic claim — each instance gets a disjoint set of rows even if both
+  // check at the same millisecond.
+  const due = await claimDueSchedules()
   if (!due.length) return { triggered: 0, skipped: 0 }
 
   let triggered = 0
@@ -16,9 +18,6 @@ export async function runDueSchedules(): Promise<{ triggered: number; skipped: n
       skipped++
       continue
     }
-
-    // Mark triggered before starting — prevents double-firing on slow runs
-    await markScheduleTriggered(schedule.id)
 
     const job = createJob({
       site: schedule.site,

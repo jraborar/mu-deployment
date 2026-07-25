@@ -202,14 +202,14 @@ export async function executeJob(job: Job): Promise<void> {
       } else if (stage === 'test') {
         log('status', 'Deploying to test...')
         const r = await runStream(
-          `terminus env:deploy --sync-content --updatedb --cc --note "Mu Deployment: ${job.source} to test" ${job.site}.test 2>&1`,
+          `terminus env:deploy --sync-content --updatedb --cc --note "Pantheon Managed Updates: Deployed from ${job.label}" ${job.site}.test 2>&1`,
           (line) => log('info', line),
         )
         if (r.code !== 0) throw new Error(`Deploy to test failed`)
       } else if (stage === 'live') {
         log('status', 'Deploying to live...')
         const r = await runStream(
-          `terminus env:deploy --updatedb --cc --note "Mu Deployment: ${job.source} to live" ${job.site}.live 2>&1`,
+          `terminus env:deploy --updatedb --cc --note "Pantheon Managed Updates: Deployed from ${job.label}" ${job.site}.live 2>&1`,
           (line) => log('info', line),
         )
         if (r.code !== 0) throw new Error(`Deploy to live failed`)

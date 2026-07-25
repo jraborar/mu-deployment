@@ -96,19 +96,16 @@ export async function cancelSchedule(id: string): Promise<void> {
   await db.from('scheduled_deployments').update({ status: 'cancelled' }).eq('id', id)
 }
 
-export async function getDueSchedules(): Promise<(ScheduleRecord & { id: string; status: string })[]> {
+// Atomically claims due schedules — updates to 'triggered' and returns only
+// the rows this instance claimed, preventing double-firing across instances.
+export async function claimDueSchedules(): Promise<(ScheduleRecord & { id: string; status: string })[]> {
   const db = getClient()
   if (!db) return []
   const { data } = await db
     .from('scheduled_deployments')
-    .select('*')
+    .update({ status: 'triggered' })
     .eq('status', 'pending')
     .lte('scheduled_for', new Date().toISOString())
+    .select()
   return data ?? []
-}
-
-export async function markScheduleTriggered(id: string): Promise<void> {
-  const db = getClient()
-  if (!db) return
-  await db.from('scheduled_deployments').update({ status: 'triggered' }).eq('id', id)
 }

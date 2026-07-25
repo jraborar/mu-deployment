@@ -19,6 +19,7 @@ export interface Job {
   status: 'running' | 'completed' | 'failed' | 'awaiting-approval' | 'paused'
   autoApprove: boolean
   cancelRequested: boolean
+  label: string
   logs: LogEntry[]
   startedAt: number
   lastActivity: number
@@ -41,6 +42,7 @@ export function createJob(params: {
   destination: string
   stages: string[]
   autoApprove?: boolean
+  label?: string
 }): Job {
   if (store.size >= MAX_JOBS) {
     const oldest = [...store.entries()].sort((a, b) => a[1].startedAt - b[1].startedAt)[0]
@@ -58,6 +60,7 @@ export function createJob(params: {
     status: 'running',
     autoApprove: params.autoApprove ?? false,
     cancelRequested: false,
+    label: params.label ?? params.source,
     logs: [],
     startedAt: Date.now(),
     lastActivity: Date.now(),
