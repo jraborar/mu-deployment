@@ -16,10 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="font-mono text-xs font-black text-black">P</span>
             </div>
             <span className="font-mono text-sm font-semibold text-pantheon-text">
-              Mu Deployment
-            </span>
-            <span className="ml-1 rounded-full border border-pantheon-yellow/30 bg-pantheon-yellow/10 px-2.5 py-0.5 font-mono text-xs text-pantheon-yellow">
-              Pantheon Pipeline
+              Pantheon MU Deployment
             </span>
           </div>
         </header>
