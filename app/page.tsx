@@ -313,9 +313,15 @@ export default function Page() {
   // History state
   const [history, setHistory] = useState<HistoryItem[]>([])
 
-  const consoleRef  = useRef<HTMLDivElement>(null)
-  const abortRef    = useRef<AbortController | null>(null)
-  const isTerminal  = ['completed', 'failed', 'paused'].includes(deployStatus)
+  const consoleRef       = useRef<HTMLDivElement>(null)
+  const abortRef         = useRef<AbortController | null>(null)
+  const deployStatusRef  = useRef<DeployStatus>('idle')
+  const jobIdRef         = useRef<string | null>(null)
+  const isTerminal       = ['completed', 'failed', 'paused'].includes(deployStatus)
+
+  // Keep refs in sync so async callbacks always see current values
+  useEffect(() => { deployStatusRef.current = deployStatus }, [deployStatus])
+  useEffect(() => { jobIdRef.current = jobId }, [jobId])
 
   // Auto-refresh history when a deployment finishes
   useEffect(() => {
@@ -415,8 +421,34 @@ export default function Page() {
     }
   }, [handleSSEData])
 
+  // Streams a response and auto-reconnects if the connection drops while the
+  // job is still running. Handles Railway proxy timeouts transparently.
+  const streamWithAutoReconnect = useCallback(async (initialResponse: Response, id: string) => {
+    let response = initialResponse
+    let attempts = 0
+    const MAX = 8
+
+    while (attempts <= MAX) {
+      await readSSEStream(response)
+
+      const status = deployStatusRef.current
+      if (!['running', 'awaiting-approval'].includes(status)) break
+      if (abortRef.current?.signal.aborted) break
+
+      // Stream dropped mid-job — wait then reconnect
+      attempts++
+      const delay = Math.min(1000 * 2 ** attempts, 30_000)
+      await new Promise(r => setTimeout(r, delay))
+      if (abortRef.current?.signal.aborted) break
+
+      try {
+        response = await fetch(`/api/deploy/${id}`, { signal: abortRef.current?.signal })
+        if (!response.ok) break
+      } catch { break }
+    }
+  }, [readSSEStream])
+
   const startDeployment = async () => {
-    // Cancel any previous stream before starting a new one
     abortRef.current?.abort()
     abortRef.current = new AbortController()
 
@@ -445,13 +477,13 @@ export default function Page() {
         return
       }
 
-      const id = res.headers.get('X-Job-Id')
+      const id = res.headers.get('X-Job-Id') ?? ''
       if (id) {
         setJobId(id)
         sessionStorage.setItem('mu-deploy-job-id', id)
       }
 
-      await readSSEStream(res)
+      await streamWithAutoReconnect(res, id)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setDeployStatus('failed')
@@ -470,7 +502,7 @@ export default function Page() {
         reset()
         return
       }
-      await readSSEStream(res)
+      await streamWithAutoReconnect(res, jobId)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') reset()
     }
