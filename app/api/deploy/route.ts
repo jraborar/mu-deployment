@@ -57,10 +57,13 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
 
-  const { site, source, destination } = body as Record<string, string>
+  const { site, source, destination, label } = body as Record<string, string>
 
   if (!INPUT_RE.test(site) || !INPUT_RE.test(source)) {
     return Response.json({ error: 'Invalid site or source name' }, { status: 400 })
+  }
+  if (label && !INPUT_RE.test(label)) {
+    return Response.json({ error: 'Invalid label' }, { status: 400 })
   }
   if (!['dev', 'test', 'live'].includes(destination)) {
     return Response.json({ error: 'Destination must be dev, test, or live' }, { status: 400 })
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Destination must come after source in the pipeline (dev → test → live)' }, { status: 400 })
   }
 
-  const job = createJob({ site, source, destination, stages })
+  const job = createJob({ site, source, destination, stages, label: label || source })
   void executeJob(job)
   return streamJob(job, request)
 }

@@ -237,6 +237,7 @@ export default function Page() {
   // Deploy state
   const [site, setSite]                = useState('')
   const [source, setSource]            = useState('')
+  const [label, setLabel]              = useState('')
   const [destination, setDestination]  = useState<'dev' | 'test' | 'live'>('live')
   const [deployStatus, setDeployStatus] = useState<DeployStatus>('idle')
   const [jobId, setJobId]              = useState<string | null>(null)
@@ -329,6 +330,11 @@ export default function Page() {
       fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
     }
   }, [deployStatus])
+
+  // Auto-fill label from source when source is a custom multidev
+  useEffect(() => {
+    if (!['dev', 'test', 'live'].includes(source)) setLabel(source)
+  }, [source])
 
   // Auto-scroll console
   useEffect(() => {
@@ -467,7 +473,7 @@ export default function Page() {
         method: 'POST',
         signal: abortRef.current.signal,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ site, source, destination }),
+        body: JSON.stringify({ site, source, destination, label: label || source }),
       })
 
       if (!res.ok) {
@@ -659,6 +665,17 @@ export default function Page() {
                     onChange={e => setSource(e.target.value)}
                   />
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="font-mono text-xs text-pantheon-text-muted">
+                  Commit label <span className="text-pantheon-text-dim">(used in "Pantheon Managed Updates: Deployed from …")</span>
+                </label>
+                <input
+                  className={inputCls}
+                  placeholder="original multidev name e.g. autopilot"
+                  value={label}
+                  onChange={e => setLabel(e.target.value)}
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="font-mono text-xs text-pantheon-text-muted">Final Destination</label>
