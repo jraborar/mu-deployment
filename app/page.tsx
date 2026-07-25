@@ -186,30 +186,35 @@ function HistoryCard({ item }: { item: HistoryItem }) {
     completed: 'text-pantheon-success',
     failed:    'text-pantheon-error',
     paused:    'text-pantheon-warning',
+    cancelled: 'text-pantheon-text-muted',
+    running:   'text-pantheon-info animate-pulse',
   }
+  const fmt = (ts: string) =>
+    new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+
   return (
-    <div className="flex items-center justify-between rounded-lg border border-pantheon-border bg-pantheon-bg-elevated p-4">
-      <div className="space-y-0.5">
-        <div className="font-mono text-sm font-semibold text-pantheon-text">
+    <div className="rounded-lg border border-pantheon-border bg-pantheon-bg-elevated p-4 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-sm font-semibold text-pantheon-text truncate mr-4">
           {item.site}
-          <span className="mx-2 text-pantheon-text-dim">·</span>
-          <span className="text-pantheon-yellow">{item.source}</span>
-          <span className="mx-2 text-pantheon-text-dim">→</span>
-          <span className="text-pantheon-info">{item.destination}</span>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-xs">
-          <span className={statusColors[item.status] ?? 'text-pantheon-text-muted'}>
-            {item.status}
+        </span>
+        <span className={`font-mono text-xs font-semibold shrink-0 ${statusColors[item.status] ?? 'text-pantheon-text-muted'}`}>
+          {item.status}
+        </span>
+      </div>
+      <div className="font-mono text-xs">
+        <span className="text-pantheon-yellow">{item.source}</span>
+        <span className="mx-1.5 text-pantheon-text-dim">→</span>
+        <span className="text-pantheon-info">{item.destination}</span>
+        {item.stages_completed.length > 0 && (
+          <span className="ml-2 text-pantheon-text-dim">
+            ({item.stages_completed.join(' → ')})
           </span>
-          <span className="text-pantheon-text-dim">
-            {new Date(item.started_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-          </span>
-          {item.stages_completed.length > 0 && (
-            <span className="text-pantheon-text-dim">
-              {item.stages_completed.join(' → ')}
-            </span>
-          )}
-        </div>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-x-4 font-mono text-xs text-pantheon-text-dim">
+        <span><span className="text-pantheon-text-muted">Started:</span> {fmt(item.started_at)}</span>
+        <span><span className="text-pantheon-text-muted">Completed:</span> {item.completed_at ? fmt(item.completed_at) : '—'}</span>
       </div>
     </div>
   )

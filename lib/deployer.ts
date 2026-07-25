@@ -1,5 +1,5 @@
 import { type Job, type LogEntry } from '@/lib/jobStore'
-import { run, getLatestCommitHash } from '@/lib/terminus'
+import { run, runStream, getLatestCommitHash } from '@/lib/terminus'
 import { findByPrefix } from '@/lib/pipeline'
 import { createDeploymentRecord, finalizeDeploymentRecord } from '@/lib/supabase'
 import { getPacificYYMMDD } from '@/lib/timezone'
@@ -46,7 +46,16 @@ export async function executeJob(job: Job): Promise<void> {
   try {
     log('info', `Deployment started: ${job.source} → ${job.destination} on ${job.site}${job.autoApprove ? ' (scheduled)' : ''}`)
 
-    // 1. Validate site
+    // 1. Verify Terminus authentication
+    log('status', 'Verifying Terminus authentication...')
+    const whoami = await run(`terminus auth:whoami 2>&1`)
+    const identity = whoami.stdout.split('\n').find(l => l.includes('@'))?.trim()
+    if (whoami.code !== 0 || !identity) {
+      throw new Error('Terminus is not authenticated. Check TERMINUS_TOKEN environment variable.')
+    }
+    log('info', `Authenticated as: ${identity}`)
+
+    // 2. Validate site
     log('status', `Validating site ${job.site}...`)
     const siteInfo = await run(`terminus site:info ${job.site} 2>&1`)
     if (siteInfo.stdout.includes('not found') || siteInfo.code !== 0) {
@@ -54,12 +63,22 @@ export async function executeJob(job: Job): Promise<void> {
     }
     log('info', `Site ${job.site} verified`)
 
-    // 2. Check uncommitted changes
+    // 3. Check uncommitted changes via JSON (structured, not fragile string matching)
     log('status', 'Checking for uncommitted changes...')
     for (const env of ['dev', 'test', 'live']) {
       log('info', `  Checking ${env}...`)
-      const diff = await run(`terminus env:diffstat ${job.site}.${env} 2>&1`)
-      if (diff.stdout.includes('files changed') || diff.stdout.includes('ahead')) {
+      const diff = await run(`terminus env:diffstat ${job.site}.${env} --format=json 2>&1`)
+      let hasChanges = false
+      try {
+        const cleaned = diff.stdout.split('\n')
+          .filter(l => !/^\s*(Deprecated|Warning|Notice|PHP):/i.test(l))
+          .join('\n').trim()
+        const data = JSON.parse(cleaned)
+        hasChanges = Array.isArray(data) && data.length > 0
+      } catch {
+        hasChanges = diff.stdout.includes('files changed') || diff.stdout.includes('ahead')
+      }
+      if (hasChanges) {
         throw new Error(`Uncommitted or undeployed code exists in ${env}. Commit and deploy before proceeding.`)
       }
     }
@@ -166,22 +185,34 @@ export async function executeJob(job: Job): Promise<void> {
       }
 
       log('create', `Creating snapshot ${snapNames[stage]}...`)
-      const snapResult = await run(`terminus multidev:create ${job.site}.${stage} ${snapNames[stage]} 2>&1`)
-      if (snapResult.code !== 0) throw new Error(`Snapshot creation failed: ${snapResult.stdout || snapResult.stderr}`)
+      const snapResult = await runStream(
+        `terminus multidev:create ${job.site}.${stage} ${snapNames[stage]} 2>&1`,
+        (line) => log('info', line),
+      )
+      if (snapResult.code !== 0) throw new Error(`Snapshot creation failed`)
       log('info', `Snapshot ${snapNames[stage]} created`)
 
       if (stage === 'dev') {
         log('status', `Merging ${job.source} into dev...`)
-        const r = await run(`terminus multidev:merge-to-dev --updatedb ${job.site}.${job.source} 2>&1`)
-        if (r.code !== 0) throw new Error(`Merge to dev failed: ${r.stdout || r.stderr}`)
+        const r = await runStream(
+          `terminus multidev:merge-to-dev --updatedb ${job.site}.${job.source} 2>&1`,
+          (line) => log('info', line),
+        )
+        if (r.code !== 0) throw new Error(`Merge to dev failed`)
       } else if (stage === 'test') {
         log('status', 'Deploying to test...')
-        const r = await run(`terminus env:deploy --sync-content --updatedb --cc --note "Mu Deployment: ${job.source} to test" ${job.site}.test 2>&1`)
-        if (r.code !== 0) throw new Error(`Deploy to test failed: ${r.stdout || r.stderr}`)
+        const r = await runStream(
+          `terminus env:deploy --sync-content --updatedb --cc --note "Mu Deployment: ${job.source} to test" ${job.site}.test 2>&1`,
+          (line) => log('info', line),
+        )
+        if (r.code !== 0) throw new Error(`Deploy to test failed`)
       } else if (stage === 'live') {
         log('status', 'Deploying to live...')
-        const r = await run(`terminus env:deploy --updatedb --cc --note "Mu Deployment: ${job.source} to live" ${job.site}.live 2>&1`)
-        if (r.code !== 0) throw new Error(`Deploy to live failed: ${r.stdout || r.stderr}`)
+        const r = await runStream(
+          `terminus env:deploy --updatedb --cc --note "Mu Deployment: ${job.source} to live" ${job.site}.live 2>&1`,
+          (line) => log('info', line),
+        )
+        if (r.code !== 0) throw new Error(`Deploy to live failed`)
       }
 
       job.currentStage = null
