@@ -313,8 +313,16 @@ export default function Page() {
   // History state
   const [history, setHistory] = useState<HistoryItem[]>([])
 
-  const consoleRef = useRef<HTMLDivElement>(null)
-  const isTerminal = ['completed', 'failed', 'paused'].includes(deployStatus)
+  const consoleRef  = useRef<HTMLDivElement>(null)
+  const abortRef    = useRef<AbortController | null>(null)
+  const isTerminal  = ['completed', 'failed', 'paused'].includes(deployStatus)
+
+  // Auto-refresh history when a deployment finishes
+  useEffect(() => {
+    if (['completed', 'failed', 'cancelled', 'paused'].includes(deployStatus)) {
+      fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
+    }
+  }, [deployStatus])
 
   // Auto-scroll console
   useEffect(() => {
@@ -397,10 +405,21 @@ export default function Page() {
           try { handleSSEData(JSON.parse(line.slice(6))) } catch {}
         }
       }
-    } catch {}
+    } catch (err) {
+      // AbortError is expected when reset() or a new deployment cancels the stream
+      if ((err as Error).name !== 'AbortError') {
+        setDeployStatus('failed')
+      }
+    } finally {
+      reader.cancel()
+    }
   }, [handleSSEData])
 
   const startDeployment = async () => {
+    // Cancel any previous stream before starting a new one
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
+
     setLogs([])
     setCompleted([])
     setCurrent(null)
@@ -414,6 +433,7 @@ export default function Page() {
     try {
       const res = await fetch('/api/deploy', {
         method: 'POST',
+        signal: abortRef.current.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ site, source, destination }),
       })
@@ -432,23 +452,28 @@ export default function Page() {
       }
 
       await readSSEStream(res)
-    } catch {
-      setDeployStatus('failed')
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setDeployStatus('failed')
+      }
     }
   }
 
   const reconnect = async () => {
     if (!jobId) return
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
     setDeployStatus('running')
     try {
-      const res = await fetch(`/api/deploy/${jobId}`)
+      const res = await fetch(`/api/deploy/${jobId}`, { signal: abortRef.current.signal })
       if (!res.ok) {
-        // Job gone — server was restarted. Clear stale session silently.
         reset()
         return
       }
       await readSSEStream(res)
-    } catch { reset() }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') reset()
+    }
   }
 
   const sendApproval = async (approved: boolean) => {
@@ -468,6 +493,8 @@ export default function Page() {
   }
 
   const reset = () => {
+    abortRef.current?.abort()
+    abortRef.current = null
     setDeployStatus('idle')
     setLogs([])
     setCompleted([])
