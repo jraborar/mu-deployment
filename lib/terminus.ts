@@ -15,6 +15,7 @@ function stripAnsi(s: string): string {
 
 function isNoise(line: string): boolean {
   return /^\s*(Deprecated|Warning|Notice|PHP):/i.test(line)
+    || /^\d+\/\d+\s*\[/.test(line)
 }
 
 export function run(cmd: string): Promise<RunResult> {
