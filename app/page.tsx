@@ -530,7 +530,7 @@ export default function Page() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         site: schedSite, source: schedSource, destination: schedDest,
-        scheduled_for: schedFor, notes: schedNotes,
+        scheduled_for: new Date(schedFor).toISOString(), notes: schedNotes,
       }),
     })
     setSchedSite(''); setSchedSource(''); setSchedFor(''); setSchedNotes('')
