@@ -96,6 +96,13 @@ export async function cancelSchedule(id: string): Promise<void> {
   await db.from('scheduled_deployments').update({ status: 'cancelled' }).eq('id', id)
 }
 
+export async function updateSchedule(id: string, updates: Partial<Pick<ScheduleRecord, 'scheduled_for' | 'notes'>>): Promise<void> {
+  const db = getClient()
+  if (!db) return
+  const { error } = await db.from('scheduled_deployments').update(updates).eq('id', id)
+  if (error) console.error('[supabase] updateSchedule:', error.message)
+}
+
 // Marks any records stuck as 'running' from a crashed/restarted server instance as failed.
 // Safe to call on every startup — a running record with no in-memory counterpart is always orphaned.
 export async function cleanupStaleRunningRecords(): Promise<number> {

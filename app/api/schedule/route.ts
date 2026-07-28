@@ -1,4 +1,4 @@
-import { createSchedule, listSchedules, cancelSchedule } from '@/lib/supabase'
+import { createSchedule, listSchedules, cancelSchedule, updateSchedule } from '@/lib/supabase'
 
 export async function GET() {
   const schedules = await listSchedules()
@@ -18,6 +18,15 @@ export async function POST(request: Request) {
   }
 
   await createSchedule({ site, source, destination, scheduled_for, notes })
+  return Response.json({ ok: true })
+}
+
+export async function PATCH(request: Request) {
+  const body = await request.json().catch(() => null)
+  if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  const { id, scheduled_for, notes } = body
+  if (!id || !scheduled_for) return Response.json({ error: 'Missing id or scheduled_for' }, { status: 400 })
+  await updateSchedule(id, { scheduled_for, notes })
   return Response.json({ ok: true })
 }
 

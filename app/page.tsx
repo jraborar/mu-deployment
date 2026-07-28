@@ -138,45 +138,133 @@ function ApprovalPrompt({
   )
 }
 
-function ScheduleCard({
-  item, onCancel, onRunNow,
+const editInputCls = [
+  'w-full rounded border border-pantheon-border bg-pantheon-bg',
+  'px-2 py-1 font-mono text-xs text-pantheon-text placeholder-pantheon-text-dim',
+  'outline-none transition focus:border-pantheon-yellow focus:ring-1 focus:ring-pantheon-yellow',
+].join(' ')
+
+function ScheduleTable({
+  schedules, siteNames, editingId, editFor, editNotes,
+  onEdit, onSave, onCancelEdit, onRunNow, onCancel,
+  setEditFor, setEditNotes,
 }: {
-  item: ScheduleItem
-  onCancel: (id: string) => void
+  schedules: ScheduleItem[]
+  siteNames: Record<string, string>
+  editingId: string | null
+  editFor: string
+  editNotes: string
+  onEdit: (item: ScheduleItem) => void
+  onSave: (id: string) => void
+  onCancelEdit: () => void
   onRunNow: (item: ScheduleItem) => void
+  onCancel: (id: string) => void
+  setEditFor: (v: string) => void
+  setEditNotes: (v: string) => void
 }) {
-  const dt = new Date(item.scheduled_for)
+  const fmtDt = (iso: string) =>
+    new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+
   return (
-    <div className="flex items-center justify-between rounded-lg border border-pantheon-border bg-pantheon-bg-elevated p-4">
-      <div className="space-y-0.5">
-        <div className="font-mono text-sm font-semibold text-pantheon-text">
-          {item.site}
-          <span className="mx-2 text-pantheon-text-dim">·</span>
-          <span className="text-pantheon-yellow">{item.source}</span>
-          <span className="mx-2 text-pantheon-text-dim">→</span>
-          <span className="text-pantheon-info">{item.destination}</span>
-        </div>
-        <div className="font-mono text-xs text-pantheon-text-muted">
-          {dt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-        </div>
-        {item.notes && (
-          <div className="font-mono text-xs text-pantheon-text-dim">{item.notes}</div>
-        )}
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={() => onRunNow(item)}
-          className="rounded border border-pantheon-yellow/40 px-3 py-1.5 font-mono text-xs text-pantheon-yellow hover:bg-pantheon-yellow/10 transition-colors"
-        >
-          ▶ Run Now
-        </button>
-        <button
-          onClick={() => onCancel(item.id)}
-          className="rounded border border-pantheon-error/40 px-3 py-1.5 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
+    <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-hidden">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-pantheon-bg-elevated">
+            <th className="px-4 py-2.5 text-left font-mono text-xs uppercase tracking-widest text-pantheon-text-muted">Site</th>
+            <th className="px-4 py-2.5 text-left font-mono text-xs uppercase tracking-widest text-pantheon-text-muted">Pipeline</th>
+            <th className="px-4 py-2.5 text-left font-mono text-xs uppercase tracking-widest text-pantheon-text-muted">Scheduled For</th>
+            <th className="px-4 py-2.5 text-left font-mono text-xs uppercase tracking-widest text-pantheon-text-muted">Notes</th>
+            <th className="px-4 py-2.5 text-right font-mono text-xs uppercase tracking-widest text-pantheon-text-muted">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {schedules.map(item => {
+            const isEditing = editingId === item.id
+            return (
+              <tr key={item.id} className="border-t border-pantheon-border hover:bg-pantheon-bg-elevated/40 transition-colors">
+                <td className="px-4 py-3 font-mono text-sm font-semibold text-pantheon-text whitespace-nowrap">
+                  {siteNames[item.site] ?? item.site}
+                </td>
+                <td className="px-4 py-3 font-mono text-sm whitespace-nowrap">
+                  <span className="text-pantheon-yellow">{item.source}</span>
+                  <span className="mx-1.5 text-pantheon-text-dim">→</span>
+                  <span className="text-pantheon-info">{item.destination}</span>
+                </td>
+                <td className="px-4 py-3 font-mono text-sm text-pantheon-text-muted">
+                  {isEditing ? (
+                    <input
+                      type="datetime-local"
+                      value={editFor}
+                      onChange={e => setEditFor(e.target.value)}
+                      className={editInputCls}
+                    />
+                  ) : (
+                    fmtDt(item.scheduled_for)
+                  )}
+                </td>
+                <td className="px-4 py-3 font-mono text-sm text-pantheon-text-dim max-w-[160px]">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editNotes}
+                      onChange={e => setEditNotes(e.target.value)}
+                      placeholder="Notes"
+                      className={editInputCls}
+                    />
+                  ) : (
+                    <span className="truncate block">{item.notes ?? '—'}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1.5 justify-end">
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={() => onSave(item.id)}
+                          disabled={!editFor}
+                          className="rounded border border-pantheon-success/40 px-2.5 py-1 font-mono text-xs text-pantheon-success hover:bg-pantheon-success/10 disabled:opacity-40 transition-colors"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={onCancelEdit}
+                          className="rounded border border-pantheon-border px-2.5 py-1 font-mono text-xs text-pantheon-text-muted hover:bg-pantheon-bg-elevated transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onRunNow(item)}
+                          title="Run Now"
+                          className="rounded border border-pantheon-yellow/40 px-2.5 py-1 font-mono text-xs text-pantheon-yellow hover:bg-pantheon-yellow/10 transition-colors"
+                        >
+                          ▶
+                        </button>
+                        <button
+                          onClick={() => onEdit(item)}
+                          title="Edit"
+                          className="rounded border border-pantheon-border px-2.5 py-1 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi hover:text-pantheon-text transition-colors"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => onCancel(item.id)}
+                          title="Cancel"
+                          className="rounded border border-pantheon-error/40 px-2.5 py-1 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -258,6 +346,11 @@ export default function Page() {
   const [schedNotes, setSchedNotes]    = useState('')
   const [schedLoading, setSchedLoading] = useState(false)
   const [schedules, setSchedules]      = useState<ScheduleItem[]>([])
+
+  const [siteNames, setSiteNames]   = useState<Record<string, string>>({})
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [editFor, setEditFor]       = useState('')
+  const [editNotes, setEditNotes]   = useState('')
 
   const [schedFetchedCreatedDate, setSchedFetchedCreatedDate] = useState<Date | null>(null)
   const [schedDateFetching, setSchedDateFetching]             = useState(false)
@@ -358,6 +451,22 @@ export default function Page() {
       fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
     }
   }, [tab])
+
+  // Fetch human-readable site labels for any new sites in the schedule list
+  useEffect(() => {
+    const unique = [...new Set(schedules.map(s => s.site))]
+    const missing = unique.filter(s => !siteNames[s])
+    if (!missing.length) return
+    missing.forEach(async (site) => {
+      try {
+        const res = await fetch(`/api/site-name?site=${encodeURIComponent(site)}`)
+        if (res.ok) {
+          const { label } = await res.json()
+          if (label) setSiteNames(prev => ({ ...prev, [site]: label }))
+        }
+      } catch {}
+    })
+  }, [schedules])
 
   const handleSSEData = useCallback((data: Record<string, unknown>) => {
     switch (data.type) {
@@ -551,6 +660,17 @@ export default function Page() {
       body: JSON.stringify({ id }),
     })
     setSchedules(prev => prev.filter(s => s.id !== id))
+  }
+
+  const saveEdit = async (id: string) => {
+    await fetch('/api/schedule', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, scheduled_for: editFor, notes: editNotes }),
+    })
+    setEditingId(null)
+    const updated = await fetch('/api/schedule').then(r => r.json())
+    setSchedules(updated)
   }
 
   const runScheduleNow = (item: ScheduleItem) => {
@@ -905,9 +1025,24 @@ export default function Page() {
               <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
                 Upcoming
               </h2>
-              {schedules.map(s => (
-                <ScheduleCard key={s.id} item={s} onCancel={cancelSchedule} onRunNow={runScheduleNow} />
-              ))}
+              <ScheduleTable
+                schedules={schedules}
+                siteNames={siteNames}
+                editingId={editingId}
+                editFor={editFor}
+                editNotes={editNotes}
+                onEdit={(item) => {
+                  setEditingId(item.id)
+                  setEditFor(toDatetimeLocal(new Date(item.scheduled_for)))
+                  setEditNotes(item.notes ?? '')
+                }}
+                onSave={saveEdit}
+                onCancelEdit={() => setEditingId(null)}
+                onRunNow={runScheduleNow}
+                onCancel={cancelSchedule}
+                setEditFor={setEditFor}
+                setEditNotes={setEditNotes}
+              />
             </div>
           )}
 
