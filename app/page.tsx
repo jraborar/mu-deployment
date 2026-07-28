@@ -666,7 +666,7 @@ export default function Page() {
     await fetch('/api/schedule', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, scheduled_for: editFor, notes: editNotes }),
+      body: JSON.stringify({ id, scheduled_for: new Date(editFor).toISOString(), notes: editNotes }),
     })
     setEditingId(null)
     const updated = await fetch('/api/schedule').then(r => r.json())
@@ -688,7 +688,7 @@ export default function Page() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         site: schedSite, source: schedSource, destination: schedDest,
-        scheduled_for: schedFor, notes: schedNotes,
+        scheduled_for: new Date(schedFor).toISOString(), notes: schedNotes,
       }),
     })
     setSchedSite(''); setSchedSource(''); setSchedFor(''); setSchedNotes('')

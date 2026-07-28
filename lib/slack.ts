@@ -72,6 +72,35 @@ export function verifySignature(rawBody: string, timestamp: string, signature: s
 
 // ── Block Kit builders (compatible with both Slack and Pumble) ────────────────
 
+export function buildLongRunningBlocks(
+  source: string, destination: string, site: string,
+  elapsedMin: number, done: number, total: number, currentStage: string | null,
+): (Block | KnownBlock)[] {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  const filled = Math.round(pct / 10)
+  const bar = '█'.repeat(filled) + '░'.repeat(10 - filled)
+  const stage = currentStage ? `Currently: \`${currentStage}\`` : 'Finalizing...'
+  return [{
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `⏱ *Deployment running longer than usual*\n\`${source} → ${destination}\` on \`${site}\`\n\`[${bar}] ${pct}%\` · ${done}/${total} stages · ${elapsedMin} min elapsed\n${stage}`,
+    },
+  }]
+}
+
+export function buildScheduledBlocks(source: string, destination: string, site: string, scheduledFor: string, notes?: string): (Block | KnownBlock)[] {
+  const dt = new Date(scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+  const notesLine = notes ? `\n_${notes}_` : ''
+  return [{
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `📅 *Deployment scheduled*\n\`${source} → ${destination}\` on \`${site}\`\n${dt}${notesLine}`,
+    },
+  }]
+}
+
 export function buildStartedBlocks(source: string, destination: string, site: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',

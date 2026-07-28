@@ -1,6 +1,7 @@
 import { runDueSchedules } from '@/lib/scheduler'
 import { getAllJobs, getJob } from '@/lib/jobStore'
-import { finalizeDeploymentRecord, cleanupStaleRunningRecords } from '@/lib/supabase'
+import { finalizeDeploymentRecord, cleanupStaleRunningRecords, listSchedules } from '@/lib/supabase'
+import { broadcastMessage, buildScheduledBlocks } from '@/lib/slack'
 
 export const runtime = 'nodejs'
 
@@ -36,6 +37,18 @@ async function serverInit() {
   // Startup: mark any orphaned 'running' Supabase records as failed
   const cleaned = await cleanupStaleRunningRecords()
   if (cleaned > 0) console.log(`[startup] Marked ${cleaned} stale running deployment(s) as failed`)
+
+  // Notify Slack of any pending schedules that existed before this process started
+  const pending = await listSchedules()
+  if (pending.length > 0) {
+    console.log(`[startup] Notifying Slack of ${pending.length} pending schedule(s)`)
+    await Promise.all(pending.map(s =>
+      broadcastMessage(
+        buildScheduledBlocks(s.source, s.destination, s.site, s.scheduled_for, s.notes),
+        `Deployment scheduled: ${s.source} → ${s.destination} on ${s.site}`,
+      )
+    ))
+  }
 
   // Shutdown: flush in-memory jobs to Supabase before the process exits
   const shutdown = async (signal: string) => {
