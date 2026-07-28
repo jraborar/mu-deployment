@@ -7,7 +7,7 @@ import { computeStages, parseMuSourceDate, addBusinessDays, toDatetimeLocal } fr
 
 type DeployStatus = 'idle' | 'running' | 'awaiting-approval' | 'paused' | 'completed' | 'failed'
 type ApprovalType = 'alignment' | 'stage'
-type Tab = 'deploy' | 'schedule' | 'history'
+type Tab = 'deploy' | 'schedule' | 'upcoming' | 'history'
 
 interface LogEntry {
   type: 'log'
@@ -19,11 +19,13 @@ interface LogEntry {
 interface ScheduleItem {
   id: string
   site: string
+  site_name?: string
   source: string
   destination: string
   scheduled_for: string
   status: string
   notes?: string
+  consultant?: string
 }
 
 interface HistoryItem {
@@ -138,6 +140,14 @@ function ApprovalPrompt({
   )
 }
 
+// Converts a stored UTC ISO string to a datetime-local value in Manila time (Asia/Manila / UTC+8)
+// sv-SE locale reliably produces "YYYY-MM-DD HH:mm:ss" which we trim to "YYYY-MM-DDTHH:mm"
+function toManilaDatetimeLocal(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString('sv-SE', { timeZone: 'Asia/Manila' }).slice(0, 16).replace(' ', 'T')
+}
+
 const editInputCls = [
   'w-full rounded border border-pantheon-border bg-pantheon-bg',
   'px-2 py-1 font-mono text-xs text-pantheon-text placeholder-pantheon-text-dim',
@@ -145,12 +155,11 @@ const editInputCls = [
 ].join(' ')
 
 function ScheduleTable({
-  schedules, siteNames, editingId, editFor, editNotes,
+  schedules, editingId, editFor, editNotes,
   onEdit, onSave, onCancelEdit, onRunNow, onCancel,
   setEditFor, setEditNotes,
 }: {
   schedules: ScheduleItem[]
-  siteNames: Record<string, string>
   editingId: string | null
   editFor: string
   editNotes: string
@@ -162,8 +171,10 @@ function ScheduleTable({
   setEditFor: (v: string) => void
   setEditNotes: (v: string) => void
 }) {
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
   const fmtDt = (iso: string) =>
-    new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+    new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' })
 
   return (
     <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-hidden">
@@ -179,11 +190,12 @@ function ScheduleTable({
         </thead>
         <tbody>
           {schedules.map(item => {
-            const isEditing = editingId === item.id
+            const isEditing    = editingId === item.id
+            const isConfirming = confirmingId === item.id
             return (
               <tr key={item.id} className="border-t border-pantheon-border hover:bg-pantheon-bg-elevated/40 transition-colors">
                 <td className="px-4 py-3 font-mono text-sm font-semibold text-pantheon-text whitespace-nowrap">
-                  {siteNames[item.site] ?? item.site}
+                  {item.site_name ?? item.site}
                 </td>
                 <td className="px-4 py-3 font-mono text-sm whitespace-nowrap">
                   <span className="text-pantheon-yellow">{item.source}</span>
@@ -216,7 +228,7 @@ function ScheduleTable({
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-1.5 justify-end">
+                  <div className="flex gap-1.5 justify-end items-center">
                     {isEditing ? (
                       <>
                         <button
@@ -231,6 +243,22 @@ function ScheduleTable({
                           className="rounded border border-pantheon-border px-2.5 py-1 font-mono text-xs text-pantheon-text-muted hover:bg-pantheon-bg-elevated transition-colors"
                         >
                           Cancel
+                        </button>
+                      </>
+                    ) : isConfirming ? (
+                      <>
+                        <span className="font-mono text-xs text-pantheon-error mr-1">Delete?</span>
+                        <button
+                          onClick={() => { setConfirmingId(null); onCancel(item.id) }}
+                          className="rounded border border-pantheon-error/40 px-2.5 py-1 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmingId(null)}
+                          className="rounded border border-pantheon-border px-2.5 py-1 font-mono text-xs text-pantheon-text-muted hover:bg-pantheon-bg-elevated transition-colors"
+                        >
+                          No
                         </button>
                       </>
                     ) : (
@@ -250,8 +278,8 @@ function ScheduleTable({
                           ✎
                         </button>
                         <button
-                          onClick={() => onCancel(item.id)}
-                          title="Cancel"
+                          onClick={() => setConfirmingId(item.id)}
+                          title="Delete"
                           className="rounded border border-pantheon-error/40 px-2.5 py-1 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
                         >
                           ✕
@@ -339,15 +367,14 @@ export default function Page() {
   const [nextStage, setNextStage]      = useState<string | null>(null)
 
   // Schedule state
-  const [schedSite, setSchedSite]      = useState('')
-  const [schedSource, setSchedSource]  = useState('')
+  const [schedSites, setSchedSites]    = useState([{ site: '', source: '' }])
   const [schedDest, setSchedDest]      = useState<'dev' | 'test' | 'live'>('live')
   const [schedFor, setSchedFor]        = useState('')
   const [schedNotes, setSchedNotes]    = useState('')
+  const [schedConsultant, setSchedConsultant] = useState('')
   const [schedLoading, setSchedLoading] = useState(false)
   const [schedules, setSchedules]      = useState<ScheduleItem[]>([])
 
-  const [siteNames, setSiteNames]   = useState<Record<string, string>>({})
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editFor, setEditFor]       = useState('')
   const [editNotes, setEditNotes]   = useState('')
@@ -356,32 +383,40 @@ export default function Page() {
   const [schedDateFetching, setSchedDateFetching]             = useState(false)
   const schedForEdited = useRef(false)
 
-  // Creation date: parsed from name (fast) OR fetched from Terminus (fallback)
+  // Creation date: parsed from first site's source name (fast) OR fetched from Terminus (fallback)
   const schedCreatedDate = useMemo(
-    () => parseMuSourceDate(schedSource) ?? schedFetchedCreatedDate,
-    [schedSource, schedFetchedCreatedDate],
+    () => parseMuSourceDate(schedSites[0]?.source ?? '') ?? schedFetchedCreatedDate,
+    [schedSites, schedFetchedCreatedDate],
   )
   const schedDefaultDate = useMemo(() => {
     if (!schedCreatedDate || isNaN(schedCreatedDate.getTime())) return null
     return addBusinessDays(schedCreatedDate, 3)
   }, [schedCreatedDate])
 
-  // When source changes: reset everything and re-evaluate
+  // Returns the default datetime-local string for a given date: Manila date + 3PM
+  const getManilaDefaultFor = (date: Date): string => {
+    const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+    return `${dateStr}T15:00`
+  }
+
+  // When first site row changes: reset date and re-evaluate
   useEffect(() => {
+    const site   = schedSites[0]?.site   ?? ''
+    const source = schedSites[0]?.source ?? ''
     schedForEdited.current = false
     setSchedFetchedCreatedDate(null)
     setSchedFor('')
 
     // If name has an embedded date we already have what we need — no API call
-    if (!schedSource || parseMuSourceDate(schedSource)) return
+    if (!source || parseMuSourceDate(source)) return
     // Need both site and source to fetch
-    if (!schedSite) return
+    if (!site) return
 
     const timer = setTimeout(async () => {
       setSchedDateFetching(true)
       try {
         const res = await fetch(
-          `/api/multidev-info?site=${encodeURIComponent(schedSite)}&source=${encodeURIComponent(schedSource)}`
+          `/api/multidev-info?site=${encodeURIComponent(site)}&source=${encodeURIComponent(source)}`
         )
         if (res.ok) {
           const { created } = await res.json()
@@ -392,20 +427,22 @@ export default function Page() {
         }
       } catch {}
       setSchedDateFetching(false)
-    }, 600) // debounce — wait for user to finish typing
+    }, 600)
 
     return () => clearTimeout(timer)
-  }, [schedSite, schedSource])
+  }, [schedSites])
 
-  // Auto-populate the datetime input once a default date is known; respect manual edits
+  // Auto-populate the datetime input at 3PM Manila once a default date is known
   useEffect(() => {
     if (schedDefaultDate && !schedForEdited.current) {
-      setSchedFor(toDatetimeLocal(schedDefaultDate))
+      setSchedFor(getManilaDefaultFor(schedDefaultDate))
     }
   }, [schedDefaultDate])
 
   // History state
   const [history, setHistory] = useState<HistoryItem[]>([])
+
+  const [resetCountdown, setResetCountdown] = useState<number | null>(null)
 
   const consoleRef       = useRef<HTMLDivElement>(null)
   const abortRef         = useRef<AbortController | null>(null)
@@ -416,6 +453,25 @@ export default function Page() {
   // Keep refs in sync so async callbacks always see current values
   useEffect(() => { deployStatusRef.current = deployStatus }, [deployStatus])
   useEffect(() => { jobIdRef.current = jobId }, [jobId])
+
+  // Auto-reset the deploy form 60s after completion or failure
+  useEffect(() => {
+    if (!['completed', 'failed'].includes(deployStatus)) {
+      setResetCountdown(null)
+      return
+    }
+    let count = 60
+    setResetCountdown(count)
+    const interval = setInterval(() => {
+      count -= 1
+      setResetCountdown(count)
+      if (count <= 0) {
+        clearInterval(interval)
+        reset()
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [deployStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-refresh history when a deployment finishes
   useEffect(() => {
@@ -444,7 +500,7 @@ export default function Page() {
 
   // Fetch schedules and history when tabs open
   useEffect(() => {
-    if (tab === 'schedule') {
+    if (tab === 'schedule' || tab === 'upcoming') {
       fetch('/api/schedule').then(r => r.json()).then(setSchedules).catch(() => {})
     }
     if (tab === 'history') {
@@ -452,21 +508,6 @@ export default function Page() {
     }
   }, [tab])
 
-  // Fetch human-readable site labels for any new sites in the schedule list
-  useEffect(() => {
-    const unique = [...new Set(schedules.map(s => s.site))]
-    const missing = unique.filter(s => !siteNames[s])
-    if (!missing.length) return
-    missing.forEach(async (site) => {
-      try {
-        const res = await fetch(`/api/site-name?site=${encodeURIComponent(site)}`)
-        if (res.ok) {
-          const { label } = await res.json()
-          if (label) setSiteNames(prev => ({ ...prev, [site]: label }))
-        }
-      } catch {}
-    })
-  }, [schedules])
 
   const handleSSEData = useCallback((data: Record<string, unknown>) => {
     switch (data.type) {
@@ -666,7 +707,7 @@ export default function Page() {
     await fetch('/api/schedule', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, scheduled_for: new Date(editFor).toISOString(), notes: editNotes }),
+      body: JSON.stringify({ id, scheduled_for: new Date(editFor + ':00+08:00').toISOString(), notes: editNotes }),
     })
     setEditingId(null)
     const updated = await fetch('/api/schedule').then(r => r.json())
@@ -681,25 +722,28 @@ export default function Page() {
   }
 
   const submitSchedule = async () => {
-    if (!schedSite || !schedSource || !schedFor) return
+    const validSites = schedSites.filter(s => s.site && s.source)
+    if (!validSites.length || !schedFor) return
     setSchedLoading(true)
-    await fetch('/api/schedule', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        site: schedSite, source: schedSource, destination: schedDest,
-        scheduled_for: new Date(schedFor).toISOString(), notes: schedNotes,
-      }),
-    })
-    setSchedSite(''); setSchedSource(''); setSchedFor(''); setSchedNotes('')
+    const scheduled_for = new Date(schedFor + ':00+08:00').toISOString()
+    await Promise.all(validSites.map(({ site, source }) =>
+      fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site, source, destination: schedDest, scheduled_for, notes: schedNotes, consultant: schedConsultant }),
+      })
+    ))
+    setSchedSites([{ site: '', source: '' }]); setSchedFor(''); setSchedNotes(''); setSchedConsultant('')
     const updated = await fetch('/api/schedule').then(r => r.json())
     setSchedules(updated)
     setSchedLoading(false)
+    setTab('upcoming')
   }
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'deploy',   label: 'Deploy' },
     { key: 'schedule', label: 'Schedule' },
+    { key: 'upcoming', label: 'Upcoming' },
     { key: 'history',  label: 'History' },
   ]
 
@@ -922,6 +966,19 @@ export default function Page() {
                   <span className="inline-block h-3.5 w-1.5 bg-pantheon-yellow animate-blink" />
                 )}
               </div>
+              {resetCountdown !== null && (
+                <div className="flex items-center justify-between px-1 pt-1">
+                  <span className="font-mono text-xs text-pantheon-text-dim">
+                    Form resets in <span className="text-pantheon-text-muted">{resetCountdown}s</span>
+                  </span>
+                  <button
+                    onClick={reset}
+                    className="font-mono text-xs text-pantheon-yellow hover:underline"
+                  >
+                    Reset now
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -932,15 +989,51 @@ export default function Page() {
         <div className="space-y-6">
           <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card p-6 space-y-5">
             <h2 className="font-mono text-sm font-semibold text-pantheon-text">Schedule a Deployment</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="font-mono text-xs text-pantheon-text-muted">Site ID</label>
-                <input className={inputCls} placeholder="my-pantheon-site" value={schedSite} onChange={e => setSchedSite(e.target.value)} />
+
+            {/* Dynamic site rows */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                <span className="font-mono text-xs text-pantheon-text-muted">Site ID</span>
+                <span className="font-mono text-xs text-pantheon-text-muted">Source</span>
+                <span />
               </div>
-              <div className="space-y-1.5">
-                <label className="font-mono text-xs text-pantheon-text-muted">Source</label>
-                <input className={inputCls} placeholder="my-feature or dev" value={schedSource} onChange={e => setSchedSource(e.target.value)} />
-              </div>
+              {schedSites.map((row, i) => {
+                const isDuplicate = row.site && schedules.some(s => s.site === row.site)
+                return (
+                  <div key={i} className="space-y-1">
+                    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                      <input
+                        className={inputCls}
+                        placeholder="my-pantheon-site"
+                        value={row.site}
+                        onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, site: e.target.value } : s))}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder="autopilot or dev"
+                        value={row.source}
+                        onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, source: e.target.value } : s))}
+                      />
+                      <button
+                        onClick={() => setSchedSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev)}
+                        disabled={schedSites.length === 1}
+                        className="rounded border border-pantheon-border px-2 py-2 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-error/40 hover:text-pantheon-error disabled:opacity-30 transition-colors"
+                      >✕</button>
+                    </div>
+                    {isDuplicate && (
+                      <p className="font-mono text-xs text-pantheon-warning pl-1">
+                        ⚠ {row.site} already has a pending schedule — you can still proceed or defer the existing one.
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+              <button
+                onClick={() => setSchedSites(prev => [...prev, { site: '', source: '' }])}
+                className="font-mono text-xs text-pantheon-info hover:text-pantheon-text transition-colors"
+              >
+                + Add another site
+              </button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -995,16 +1088,22 @@ export default function Page() {
                     setSchedFor(e.target.value)
                   }}
                 />
-                {schedDefaultDate && schedCreatedDate && schedFor !== toDatetimeLocal(schedDefaultDate) && schedFor && (
+                {schedDefaultDate && schedCreatedDate && schedFor !== getManilaDefaultFor(schedDefaultDate) && schedFor && (
                   <p className="font-mono text-xs text-pantheon-warning">
                     ⚠ Overriding default — original: {schedDefaultDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                   </p>
                 )}
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="font-mono text-xs text-pantheon-text-muted">Notes (optional)</label>
-              <input className={inputCls} placeholder="e.g. Sprint 12 release" value={schedNotes} onChange={e => setSchedNotes(e.target.value)} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="font-mono text-xs text-pantheon-text-muted">MU Consultant</label>
+                <input className={inputCls} placeholder="e.g. Jasper" value={schedConsultant} onChange={e => setSchedConsultant(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="font-mono text-xs text-pantheon-text-muted">Notes (optional)</label>
+                <input className={inputCls} placeholder="e.g. Sprint 12 release" value={schedNotes} onChange={e => setSchedNotes(e.target.value)} />
+              </div>
             </div>
             <div className="flex items-center justify-between pt-1">
               <p className="font-mono text-xs text-pantheon-text-dim">
@@ -1012,7 +1111,7 @@ export default function Page() {
               </p>
               <button
                 onClick={submitSchedule}
-                disabled={!schedSite || !schedSource || !schedFor || schedLoading}
+                disabled={!schedSites.some(s => s.site && s.source) || !schedFor || schedLoading}
                 className="rounded-lg bg-pantheon-yellow px-5 py-2.5 font-mono text-sm font-semibold text-black hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {schedLoading ? 'Saving...' : '+ Schedule'}
@@ -1020,35 +1119,36 @@ export default function Page() {
             </div>
           </div>
 
-          {schedules.length > 0 && (
-            <div className="space-y-3">
-              <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
-                Upcoming
-              </h2>
-              <ScheduleTable
-                schedules={schedules}
-                siteNames={siteNames}
-                editingId={editingId}
-                editFor={editFor}
-                editNotes={editNotes}
-                onEdit={(item) => {
-                  setEditingId(item.id)
-                  setEditFor(toDatetimeLocal(new Date(item.scheduled_for)))
-                  setEditNotes(item.notes ?? '')
-                }}
-                onSave={saveEdit}
-                onCancelEdit={() => setEditingId(null)}
-                onRunNow={runScheduleNow}
-                onCancel={cancelSchedule}
-                setEditFor={setEditFor}
-                setEditNotes={setEditNotes}
-              />
-            </div>
-          )}
+        </div>
+      )}
 
-          {schedules.length === 0 && (
+      {/* ── Upcoming tab ─────────────────────────────────────────────────────── */}
+      {tab === 'upcoming' && (
+        <div className="space-y-4">
+          {schedules.length > 0 ? (
+            <ScheduleTable
+              schedules={schedules}
+              editingId={editingId}
+              editFor={editFor}
+              editNotes={editNotes}
+              onEdit={(item) => {
+                setEditingId(item.id)
+                setEditFor(toManilaDatetimeLocal(item.scheduled_for))
+                setEditNotes(item.notes ?? '')
+              }}
+              onSave={saveEdit}
+              onCancelEdit={() => setEditingId(null)}
+              onRunNow={runScheduleNow}
+              onCancel={cancelSchedule}
+              setEditFor={setEditFor}
+              setEditNotes={setEditNotes}
+            />
+          ) : (
             <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
-              No scheduled deployments
+              No upcoming deployments —{' '}
+              <button onClick={() => setTab('schedule')} className="text-pantheon-yellow hover:underline">
+                schedule one
+              </button>
             </p>
           )}
         </div>

@@ -17,11 +17,14 @@ create index on deployment_history (site, started_at desc);
 create table if not exists scheduled_deployments (
   id              uuid primary key default gen_random_uuid(),
   site            text not null,
+  site_name       text,
   source          text not null,
   destination     text not null,
   scheduled_for   timestamptz not null,
   status          text not null default 'pending',
   notes           text,
+  consultant      text,
+  pre_notified    boolean not null default false,
   created_at      timestamptz not null default now()
 );
 
