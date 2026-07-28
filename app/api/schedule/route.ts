@@ -1,4 +1,5 @@
 import { createSchedule, listSchedules, cancelSchedule, updateSchedule } from '@/lib/supabase'
+import { broadcastMessage, buildScheduledBlocks } from '@/lib/slack'
 
 export async function GET() {
   const schedules = await listSchedules()
@@ -18,6 +19,10 @@ export async function POST(request: Request) {
   }
 
   await createSchedule({ site, source, destination, scheduled_for, notes })
+  void broadcastMessage(
+    buildScheduledBlocks(source, destination, site, scheduled_for, notes),
+    `Deployment scheduled: ${source} → ${destination} on ${site}`,
+  )
   return Response.json({ ok: true })
 }
 

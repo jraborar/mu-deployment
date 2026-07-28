@@ -10,6 +10,7 @@ import {
   buildCompleteBlocks,
   buildFailedBlocks,
   buildPausedBlocks,
+  buildLongRunningBlocks,
 } from '@/lib/slack'
 
 class CancelledError extends Error {
@@ -51,10 +52,30 @@ export async function executeJob(job: Job): Promise<void> {
     started_at: new Date(job.startedAt).toISOString(),
   })
 
-  void broadcastMessage(
-    buildStartedBlocks(job.source, job.destination, job.site),
-    `Deployment started: ${job.source} → ${job.destination} on ${job.site}`,
-  )
+  let siteLabel = job.site
+  const startedAt = Date.now()
+
+  let longRunningTimer: ReturnType<typeof setTimeout> | null = null
+  let longRunningInterval: ReturnType<typeof setInterval> | null = null
+
+  const stopLongRunningAlerts = () => {
+    if (longRunningTimer)   clearTimeout(longRunningTimer)
+    if (longRunningInterval) clearInterval(longRunningInterval)
+  }
+
+  const sendProgressAlert = () => {
+    if (!['running', 'awaiting-approval'].includes(job.status)) return
+    const elapsedMin = Math.floor((Date.now() - startedAt) / 60000)
+    void broadcastMessage(
+      buildLongRunningBlocks(job.source, job.destination, siteLabel, elapsedMin, job.completedStages.length, job.stages.length, job.currentStage),
+      `⏱ Deployment still running after ${elapsedMin} min on ${siteLabel}`,
+    )
+  }
+
+  longRunningTimer = setTimeout(() => {
+    sendProgressAlert()
+    longRunningInterval = setInterval(sendProgressAlert, 10 * 60 * 1000)
+  }, 30 * 60 * 1000)
 
   try {
     log('info', `Deployment started: ${job.source} → ${job.destination} on ${job.site}${job.autoApprove ? ' (scheduled)' : ''}`)
@@ -72,13 +93,23 @@ export async function executeJob(job: Job): Promise<void> {
     }
     log('info', `Authenticated as: ${identity}`)
 
-    // 2. Validate site
+    // 2. Validate site and resolve human-readable label for notifications
     log('status', `Validating site ${job.site}...`)
     const siteInfo = await run(`terminus site:info ${job.site} 2>&1`)
     if (siteInfo.stdout.includes('not found') || siteInfo.code !== 0) {
       throw new Error(`Site "${job.site}" not found or inaccessible`)
     }
-    log('info', `Site ${job.site} verified`)
+    const cleanedInfo = siteInfo.stdout.split('\n').filter(l => !/^\s*(Deprecated|Warning|Notice|PHP):/i.test(l)).join('\n').trim()
+    const jsonStart = cleanedInfo.search(/[{[]/)
+    if (jsonStart !== -1) {
+      try { const d = JSON.parse(cleanedInfo.slice(jsonStart)); siteLabel = d?.label ?? d?.name ?? job.site } catch {}
+    }
+    log('info', `Site ${siteLabel} verified`)
+
+    void broadcastMessage(
+      buildStartedBlocks(job.source, job.destination, siteLabel),
+      `Deployment started: ${job.source} → ${job.destination} on ${siteLabel}`,
+    )
 
     // 3. Check uncommitted changes via JSON (structured, not fragile string matching)
     log('status', 'Checking for uncommitted changes...')
@@ -149,7 +180,7 @@ export async function executeJob(job: Job): Promise<void> {
                 '↙ Merge dev first',
                 'Skip →',
               ),
-              `Alignment check: dev is ahead of ${job.source} on ${job.site}`,
+              `Alignment check: dev is ahead of ${job.source} on ${siteLabel}`,
             )
             const shouldMerge = await waitForApproval(job, alignPayload)
             job.status = 'running'
@@ -260,11 +291,11 @@ export async function executeJob(job: Job): Promise<void> {
           void broadcastMessage(
             buildApprovalBlocks(
               job.id,
-              `\`${job.source}\` deployed to \`${stage}\` on \`${job.site}\`. Ready to continue to \`${nextStage}\`?`,
+              `\`${job.source}\` deployed to \`${stage}\` on \`${siteLabel}\`. Ready to continue to \`${nextStage}\`?`,
               `✓ Deploy to ${nextStage}`,
               '⏸ Pause here',
             ),
-            `Approval needed: deploy to ${nextStage} on ${job.site}`,
+            `Approval needed: deploy to ${nextStage} on ${siteLabel}`,
           )
           const approved = await waitForApproval(job, stagePayload)
           job.status = 'running'
@@ -275,8 +306,8 @@ export async function executeJob(job: Job): Promise<void> {
             emit({ type: 'complete', status: 'paused' })
             job.emitter.emit('done')
             void broadcastMessage(
-              buildPausedBlocks(job.source, job.destination, job.site, stage),
-              `Deployment paused after ${stage} on ${job.site}`,
+              buildPausedBlocks(job.source, job.destination, siteLabel, stage),
+              `Deployment paused after ${stage} on ${siteLabel}`,
             )
             await finalizeDeploymentRecord(job.id, {
               stages_completed: job.completedStages, status: 'paused',
@@ -291,12 +322,12 @@ export async function executeJob(job: Job): Promise<void> {
     }
 
     job.status = 'completed'
-    log('success', `Deployment complete: ${job.source} → ${job.destination} on ${job.site}`)
+    log('success', `Deployment complete: ${job.source} → ${job.destination} on ${siteLabel}`)
     emit({ type: 'complete', status: 'completed' })
     job.emitter.emit('done')
     void broadcastMessage(
-      buildCompleteBlocks(job.source, job.destination, job.site, job.completedStages),
-      `Deployment complete: ${job.source} → ${job.destination} on ${job.site}`,
+      buildCompleteBlocks(job.source, job.destination, siteLabel, job.completedStages),
+      `Deployment complete: ${job.source} → ${job.destination} on ${siteLabel}`,
     )
 
     await finalizeDeploymentRecord(job.id, {
@@ -317,8 +348,8 @@ export async function executeJob(job: Job): Promise<void> {
     job.emitter.emit('done')
     if (!isCancelled) {
       void broadcastMessage(
-        buildFailedBlocks(job.source, job.destination, job.site, err instanceof Error ? err.message : String(err)),
-        `Deployment failed: ${job.source} → ${job.destination} on ${job.site}`,
+        buildFailedBlocks(job.source, job.destination, siteLabel, err instanceof Error ? err.message : String(err)),
+        `Deployment failed: ${job.source} → ${job.destination} on ${siteLabel}`,
       )
     }
 
@@ -326,5 +357,7 @@ export async function executeJob(job: Job): Promise<void> {
       stages_completed: job.completedStages, status,
       completed_at: new Date().toISOString(), logs: job.logs,
     })
+  } finally {
+    stopLongRunningAlerts()
   }
 }
