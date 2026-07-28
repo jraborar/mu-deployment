@@ -20,6 +20,9 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Invalid site' }, { status: 400 })
   }
 
+  const token = process.env.TERMINUS_TOKEN
+  if (token) await run(`terminus auth:login --machine-token="${token}" 2>&1`)
+
   const result = await run(`terminus site:info ${site} --format=json 2>&1`)
   const cleaned = cleanTerminusOutput(result.stdout)
   const start = cleaned.search(/[{[]/)
