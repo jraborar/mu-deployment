@@ -3,27 +3,49 @@ import { WebClient, type Block, type KnownBlock } from '@slack/web-api'
 
 // ── Slack (Web API + Socket Mode) ─────────────────────────────────────────────
 
-const SLACK_BOT_TOKEN  = process.env.SLACK_BOT_TOKEN  ?? ''
-const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID ?? ''
+const SLACK_BOT_TOKEN   = process.env.SLACK_BOT_TOKEN   ?? ''
+const SLACK_CHANNEL_ID  = process.env.SLACK_CHANNEL_ID  ?? ''
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL ?? ''
 
 export function isSlackConfigured(): boolean {
-  return Boolean(SLACK_BOT_TOKEN && SLACK_CHANNEL_ID)
+  return Boolean((SLACK_BOT_TOKEN && SLACK_CHANNEL_ID) || SLACK_WEBHOOK_URL)
 }
 
 let _web: WebClient | null = null
 function getWeb(): WebClient | null {
-  if (!isSlackConfigured()) return null
+  if (!SLACK_BOT_TOKEN) return null
   if (!_web) _web = new WebClient(SLACK_BOT_TOKEN)
   return _web
 }
 
+const PANTHEON_ICON = 'https://avatars.githubusercontent.com/u/1043537'
+const BOT_NAME      = 'Pantheon MU Deployment'
+
 async function postSlackMessage(blocks: (Block | KnownBlock)[], text: string): Promise<void> {
+  // Prefer Bot Token + Channel ID; fall back to incoming webhook
   const web = getWeb()
-  if (!web) return
-  try {
-    await web.chat.postMessage({ channel: SLACK_CHANNEL_ID, text, blocks })
-  } catch (err) {
-    console.error('[slack] postMessage failed:', err)
+  if (web && SLACK_CHANNEL_ID) {
+    try {
+      await web.chat.postMessage({
+        channel: SLACK_CHANNEL_ID, text, blocks,
+        username: BOT_NAME, icon_url: PANTHEON_ICON,
+      })
+    } catch (err) {
+      console.error('[slack] postMessage (web api) failed:', err)
+    }
+    return
+  }
+  if (SLACK_WEBHOOK_URL) {
+    try {
+      const res = await fetch(SLACK_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, blocks, username: BOT_NAME, icon_url: PANTHEON_ICON }),
+      })
+      if (!res.ok) console.error('[slack] postMessage (webhook) failed:', res.status, await res.text())
+    } catch (err) {
+      console.error('[slack] postMessage (webhook) failed:', err)
+    }
   }
 }
 
@@ -40,7 +62,7 @@ async function postPumbleMessage(blocks: (Block | KnownBlock)[], text: string): 
     const res = await fetch(PUMBLE_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, blocks }),
+      body: JSON.stringify({ text, blocks, username: BOT_NAME, icon_url: PANTHEON_ICON }),
     })
     if (!res.ok) console.error('[pumble] postMessage failed:', res.status, await res.text())
   } catch (err) {
@@ -85,6 +107,17 @@ export function buildLongRunningBlocks(
     text: {
       type: 'mrkdwn',
       text: `⏱ *Deployment running longer than usual*\n\`${source} → ${destination}\` on \`${site}\`\n\`[${bar}] ${pct}%\` · ${done}/${total} stages · ${elapsedMin} min elapsed\n${stage}`,
+    },
+  }]
+}
+
+export function buildUpcomingBlocks(source: string, destination: string, site: string, scheduledFor: string): (Block | KnownBlock)[] {
+  const dt = new Date(scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' })
+  return [{
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `⚡ *Deployment starting in ~10 minutes*\n\`${source} → ${destination}\` on \`${site}\`\n${dt} (Manila)`,
     },
   }]
 }

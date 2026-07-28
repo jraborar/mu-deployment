@@ -27,10 +27,12 @@ export interface DeploymentRecord {
 
 export interface ScheduleRecord {
   site: string
+  site_name?: string
   source: string
   destination: string
   scheduled_for: string
   notes?: string
+  consultant?: string
 }
 
 export async function createDeploymentRecord(id: string, data: Omit<DeploymentRecord, 'completed_at' | 'logs' | 'stages_completed'>): Promise<void> {
@@ -116,6 +118,24 @@ export async function cleanupStaleRunningRecords(): Promise<number> {
     .select('id')
   if (error) console.error('[supabase] cleanupStaleRunningRecords:', error.message)
   return data?.length ?? 0
+}
+
+// Claims schedules due in ~10 minutes for pre-notification — marks pre_notified
+// so only one process fires the alert even across concurrent instances.
+export async function claimPreNotifications(): Promise<(ScheduleRecord & { id: string; status: string })[]> {
+  const db = getClient()
+  if (!db) return []
+  const windowStart = new Date(Date.now() + 9 * 60 * 1000).toISOString()
+  const windowEnd   = new Date(Date.now() + 11 * 60 * 1000).toISOString()
+  const { data } = await db
+    .from('scheduled_deployments')
+    .update({ pre_notified: true })
+    .eq('status', 'pending')
+    .eq('pre_notified', false)
+    .gte('scheduled_for', windowStart)
+    .lte('scheduled_for', windowEnd)
+    .select()
+  return data ?? []
 }
 
 // Atomically claims due schedules — updates to 'triggered' and returns only

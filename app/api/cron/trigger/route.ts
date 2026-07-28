@@ -1,7 +1,7 @@
 import { runDueSchedules } from '@/lib/scheduler'
 import { getAllJobs, getJob } from '@/lib/jobStore'
 import { finalizeDeploymentRecord, cleanupStaleRunningRecords, listSchedules } from '@/lib/supabase'
-import { broadcastMessage, buildScheduledBlocks } from '@/lib/slack'
+import { broadcastMessage, buildScheduledBlocks, isSlackConfigured, isPumbleConfigured } from '@/lib/slack'
 
 export const runtime = 'nodejs'
 
@@ -37,6 +37,9 @@ async function serverInit() {
   // Startup: mark any orphaned 'running' Supabase records as failed
   const cleaned = await cleanupStaleRunningRecords()
   if (cleaned > 0) console.log(`[startup] Marked ${cleaned} stale running deployment(s) as failed`)
+
+  // Log which notification channels are active so Railway logs confirm config
+  console.log(`[startup] Notifications — Slack: ${isSlackConfigured()}, Pumble: ${isPumbleConfigured()}`)
 
   // Notify Slack of any pending schedules that existed before this process started
   const pending = await listSchedules()
