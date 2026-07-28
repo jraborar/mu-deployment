@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto'
-import { WebClient } from '@slack/web-api'
+import { WebClient, type Block, type KnownBlock } from '@slack/web-api'
 
 // ── Slack (Web API + Socket Mode) ─────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ function getWeb(): WebClient | null {
   return _web
 }
 
-async function postSlackMessage(blocks: object[], text: string): Promise<void> {
+async function postSlackMessage(blocks: (Block | KnownBlock)[], text: string): Promise<void> {
   const web = getWeb()
   if (!web) return
   try {
@@ -35,7 +35,7 @@ export function isPumbleConfigured(): boolean {
   return Boolean(PUMBLE_WEBHOOK_URL)
 }
 
-async function postPumbleMessage(blocks: object[], text: string): Promise<void> {
+async function postPumbleMessage(blocks: (Block | KnownBlock)[], text: string): Promise<void> {
   try {
     const res = await fetch(PUMBLE_WEBHOOK_URL, {
       method: 'POST',
@@ -50,7 +50,7 @@ async function postPumbleMessage(blocks: object[], text: string): Promise<void> 
 
 // ── Broadcast to all configured platforms ─────────────────────────────────────
 
-export async function broadcastMessage(blocks: object[], text: string): Promise<void> {
+export async function broadcastMessage(blocks: (Block | KnownBlock)[], text: string): Promise<void> {
   await Promise.all([
     isSlackConfigured()  ? postSlackMessage(blocks, text)  : Promise.resolve(),
     isPumbleConfigured() ? postPumbleMessage(blocks, text) : Promise.resolve(),
@@ -72,7 +72,7 @@ export function verifySignature(rawBody: string, timestamp: string, signature: s
 
 // ── Block Kit builders (compatible with both Slack and Pumble) ────────────────
 
-export function buildStartedBlocks(source: string, destination: string, site: string): object[] {
+export function buildStartedBlocks(source: string, destination: string, site: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
@@ -87,7 +87,7 @@ export function buildApprovalBlocks(
   message: string,
   approveLabel: string,
   rejectLabel: string,
-): object[] {
+): (Block | KnownBlock)[] {
   return [
     {
       type: 'section',
@@ -115,7 +115,7 @@ export function buildApprovalBlocks(
   ]
 }
 
-export function buildCompleteBlocks(source: string, destination: string, site: string, stages: string[]): object[] {
+export function buildCompleteBlocks(source: string, destination: string, site: string, stages: string[]): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
@@ -125,7 +125,7 @@ export function buildCompleteBlocks(source: string, destination: string, site: s
   }]
 }
 
-export function buildFailedBlocks(source: string, destination: string, site: string, reason: string): object[] {
+export function buildFailedBlocks(source: string, destination: string, site: string, reason: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
@@ -135,7 +135,7 @@ export function buildFailedBlocks(source: string, destination: string, site: str
   }]
 }
 
-export function buildPausedBlocks(source: string, destination: string, site: string, pausedAfter: string): object[] {
+export function buildPausedBlocks(source: string, destination: string, site: string, pausedAfter: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
