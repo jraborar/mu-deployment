@@ -3,6 +3,14 @@ import { run, runStream, getLatestCommitHash } from '@/lib/terminus'
 import { findByPrefix } from '@/lib/pipeline'
 import { createDeploymentRecord, finalizeDeploymentRecord } from '@/lib/supabase'
 import { getPacificYYMMDD } from '@/lib/timezone'
+import {
+  broadcastMessage,
+  buildStartedBlocks,
+  buildApprovalBlocks,
+  buildCompleteBlocks,
+  buildFailedBlocks,
+  buildPausedBlocks,
+} from '@/lib/slack'
 
 class CancelledError extends Error {
   constructor() { super('Deployment cancelled by user') }
@@ -43,11 +51,20 @@ export async function executeJob(job: Job): Promise<void> {
     started_at: new Date(job.startedAt).toISOString(),
   })
 
+  void broadcastMessage(
+    buildStartedBlocks(job.source, job.destination, job.site),
+    `Deployment started: ${job.source} → ${job.destination} on ${job.site}`,
+  )
+
   try {
     log('info', `Deployment started: ${job.source} → ${job.destination} on ${job.site}${job.autoApprove ? ' (scheduled)' : ''}`)
 
     // 1. Verify Terminus authentication
     log('status', 'Verifying Terminus authentication...')
+    const token = process.env.TERMINUS_TOKEN
+    if (token) {
+      await run(`terminus auth:login --machine-token="${token}" 2>&1`)
+    }
     const whoami = await run(`terminus auth:whoami 2>&1`)
     const identity = whoami.stdout.split('\n').find(l => l.includes('@'))?.trim()
     if (whoami.code !== 0 || !identity) {
@@ -125,6 +142,15 @@ export async function executeJob(job: Job): Promise<void> {
             }
             emit({ type: 'awaiting-approval', ...alignPayload })
             job.status = 'awaiting-approval'
+            void broadcastMessage(
+              buildApprovalBlocks(
+                job.id,
+                `dev is ${devAheadCount} commit(s) ahead of \`${job.source}\` (${diffStat})`,
+                '↙ Merge dev first',
+                'Skip →',
+              ),
+              `Alignment check: dev is ahead of ${job.source} on ${job.site}`,
+            )
             const shouldMerge = await waitForApproval(job, alignPayload)
             job.status = 'running'
             if (shouldMerge) {
@@ -231,6 +257,15 @@ export async function executeJob(job: Job): Promise<void> {
           }
           emit({ type: 'awaiting-approval', ...stagePayload })
           job.status = 'awaiting-approval'
+          void broadcastMessage(
+            buildApprovalBlocks(
+              job.id,
+              `\`${job.source}\` deployed to \`${stage}\` on \`${job.site}\`. Ready to continue to \`${nextStage}\`?`,
+              `✓ Deploy to ${nextStage}`,
+              '⏸ Pause here',
+            ),
+            `Approval needed: deploy to ${nextStage} on ${job.site}`,
+          )
           const approved = await waitForApproval(job, stagePayload)
           job.status = 'running'
 
@@ -239,6 +274,10 @@ export async function executeJob(job: Job): Promise<void> {
             log('warn', `Paused after ${stage}. Re-run with source=${stage} and destination=${job.destination} to continue.`)
             emit({ type: 'complete', status: 'paused' })
             job.emitter.emit('done')
+            void broadcastMessage(
+              buildPausedBlocks(job.source, job.destination, job.site, stage),
+              `Deployment paused after ${stage} on ${job.site}`,
+            )
             await finalizeDeploymentRecord(job.id, {
               stages_completed: job.completedStages, status: 'paused',
               completed_at: new Date().toISOString(), logs: job.logs,
@@ -255,6 +294,10 @@ export async function executeJob(job: Job): Promise<void> {
     log('success', `Deployment complete: ${job.source} → ${job.destination} on ${job.site}`)
     emit({ type: 'complete', status: 'completed' })
     job.emitter.emit('done')
+    void broadcastMessage(
+      buildCompleteBlocks(job.source, job.destination, job.site, job.completedStages),
+      `Deployment complete: ${job.source} → ${job.destination} on ${job.site}`,
+    )
 
     await finalizeDeploymentRecord(job.id, {
       stages_completed: job.completedStages, status: 'completed',
@@ -272,6 +315,12 @@ export async function executeJob(job: Job): Promise<void> {
     job.emitter.emit('event', entry)
     emit({ type: 'complete', status })
     job.emitter.emit('done')
+    if (!isCancelled) {
+      void broadcastMessage(
+        buildFailedBlocks(job.source, job.destination, job.site, err instanceof Error ? err.message : String(err)),
+        `Deployment failed: ${job.source} → ${job.destination} on ${job.site}`,
+      )
+    }
 
     await finalizeDeploymentRecord(job.id, {
       stages_completed: job.completedStages, status,
