@@ -3,6 +3,7 @@
 create table if not exists deployment_history (
   id              uuid primary key default gen_random_uuid(),
   site            text not null,
+  site_name       text,
   source          text not null,
   destination     text not null,
   stages_completed text[] not null default '{}',

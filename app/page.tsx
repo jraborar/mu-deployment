@@ -28,9 +28,22 @@ interface ScheduleItem {
   consultant?: string
 }
 
+interface RunningJobItem {
+  id: string
+  site: string
+  source: string
+  destination: string
+  status: string
+  stages: string[]
+  completedStages: string[]
+  currentStage: string | null
+  startedAt: number
+}
+
 interface HistoryItem {
   id: string
   site: string
+  site_name?: string
   source: string
   destination: string
   stages_completed: string[]
@@ -312,7 +325,7 @@ function HistoryCard({ item }: { item: HistoryItem }) {
     <div className="rounded-lg border border-pantheon-border bg-pantheon-bg-elevated p-4 space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="font-mono text-sm font-semibold text-pantheon-text truncate mr-4">
-          {item.site}
+          {item.site_name ?? item.site}
         </span>
         <span className={`font-mono text-xs font-semibold shrink-0 ${statusColors[item.status] ?? 'text-pantheon-text-muted'}`}>
           {item.status}
@@ -331,6 +344,80 @@ function HistoryCard({ item }: { item: HistoryItem }) {
       <div className="flex flex-wrap gap-x-4 font-mono text-xs text-pantheon-text-dim">
         <span><span className="text-pantheon-text-muted">Started:</span> {fmt(item.started_at)}</span>
         <span><span className="text-pantheon-text-muted">Completed:</span> {item.completed_at ? fmt(item.completed_at) : '—'}</span>
+      </div>
+    </div>
+  )
+}
+
+function RunningJobCard({
+  job, logs, siteName,
+}: {
+  job: RunningJobItem
+  logs: LogEntry[]
+  siteName: string
+}) {
+  const logRef = useRef<HTMLDivElement>(null)
+  const elapsedMin = Math.floor((Date.now() - job.startedAt) / 60000)
+
+  useEffect(() => {
+    const el = logRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [logs])
+
+  return (
+    <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card p-4 space-y-3 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <div className="font-mono text-sm font-semibold text-pantheon-text">{siteName}</div>
+          <div className="font-mono text-xs">
+            <span className="text-pantheon-yellow">{job.source}</span>
+            <span className="mx-1.5 text-pantheon-text-dim">→</span>
+            <span className="text-pantheon-info">{job.destination}</span>
+          </div>
+        </div>
+        <div className="text-right space-y-0.5">
+          <div className="font-mono text-xs text-pantheon-info animate-pulse">● running</div>
+          <div className="font-mono text-xs text-pantheon-text-dim">{elapsedMin} min elapsed</div>
+        </div>
+      </div>
+
+      {/* Stage indicators */}
+      {job.stages.length > 0 && (
+        <div className="flex gap-2">
+          {job.stages.map(stage => {
+            const done   = job.completedStages.includes(stage)
+            const active = job.currentStage === stage
+            return (
+              <div key={stage} className={[
+                'flex items-center gap-1 rounded px-2 py-0.5 font-mono text-xs border',
+                done   ? 'border-pantheon-success/40 text-pantheon-success' :
+                active ? 'border-pantheon-yellow/40 text-pantheon-yellow' :
+                         'border-pantheon-border text-pantheon-text-dim',
+              ].join(' ')}>
+                {done ? '✓' : active ? '⊙' : '○'} {stage}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Live log */}
+      <div
+        ref={logRef}
+        className="h-40 overflow-y-auto bg-pantheon-bg-console rounded p-3 space-y-0.5"
+      >
+        {logs.map((entry, i) => {
+          const style = LOG_STYLES[entry.logType] ?? LOG_STYLES.info
+          return (
+            <div key={i} className={`font-mono text-xs ${style.cls}`}>
+              <span className="opacity-50 mr-1.5">{style.prefix}</span>{entry.message}
+            </div>
+          )
+        })}
+        {logs.length === 0 && (
+          <span className="font-mono text-xs text-pantheon-text-dim">Connecting...</span>
+        )}
+        <span className="inline-block h-3 w-1 bg-pantheon-yellow animate-blink" />
       </div>
     </div>
   )
@@ -442,6 +529,12 @@ export default function Page() {
   // History state
   const [history, setHistory] = useState<HistoryItem[]>([])
 
+  // Running jobs (scheduled deployments with live SSE)
+  const [runningJobs, setRunningJobs]   = useState<RunningJobItem[]>([])
+  const [jobLogs, setJobLogs]           = useState<Record<string, LogEntry[]>>({})
+  const [jobStages, setJobStages]       = useState<Record<string, Pick<RunningJobItem, 'stages' | 'completedStages' | 'currentStage' | 'status'>>>({})
+  const sseConnections = useRef<Record<string, EventSource>>({})
+
   const [resetCountdown, setResetCountdown] = useState<number | null>(null)
 
   const consoleRef       = useRef<HTMLDivElement>(null)
@@ -507,6 +600,68 @@ export default function Page() {
       fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
     }
   }, [tab])
+
+  // Poll for running jobs when History tab is open
+  useEffect(() => {
+    if (tab !== 'history') {
+      // Close all SSE connections when leaving History tab
+      Object.values(sseConnections.current).forEach(es => es.close())
+      sseConnections.current = {}
+      setRunningJobs([])
+      return
+    }
+    const poll = () =>
+      fetch('/api/jobs').then(r => r.json()).then(setRunningJobs).catch(() => {})
+    poll()
+    const interval = setInterval(poll, 5000)
+    return () => clearInterval(interval)
+  }, [tab])
+
+  // Manage SSE connections for each running job
+  useEffect(() => {
+    const connections = sseConnections.current
+    const activeIds = new Set(runningJobs.map(j => j.id))
+
+    // Open new connections for newly discovered jobs
+    for (const job of runningJobs) {
+      if (connections[job.id]) continue
+      const es = new EventSource(`/api/deploy/${job.id}`)
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data) as Record<string, unknown>
+          if (data.type === 'log') {
+            setJobLogs(prev => ({ ...prev, [job.id]: [...(prev[job.id] ?? []), data as unknown as LogEntry] }))
+          }
+          if (data.type === 'job-meta' || data.type === 'stage-start' || data.type === 'stage-complete') {
+            setJobStages(prev => ({
+              ...prev,
+              [job.id]: {
+                stages:          (data.stages as string[]) ?? prev[job.id]?.stages ?? [],
+                completedStages: (data.completedStages as string[]) ?? prev[job.id]?.completedStages ?? [],
+                currentStage:    (data.currentStage as string | null) ?? prev[job.id]?.currentStage ?? null,
+                status:          (data.status as string) ?? prev[job.id]?.status ?? 'running',
+              },
+            }))
+          }
+          if (data.type === 'complete') {
+            es.close()
+            delete connections[job.id]
+            setRunningJobs(prev => prev.filter(j => j.id !== job.id))
+            fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
+          }
+        } catch {}
+      }
+      connections[job.id] = es
+    }
+
+    // Close connections for jobs no longer in the list
+    for (const id of Object.keys(connections)) {
+      if (!activeIds.has(id)) {
+        connections[id].close()
+        delete connections[id]
+      }
+    }
+  }, [runningJobs])
 
 
   const handleSSEData = useCallback((data: Record<string, unknown>) => {
@@ -1156,14 +1311,43 @@ export default function Page() {
 
       {/* ── History tab ─────────────────────────────────────────────────────── */}
       {tab === 'history' && (
-        <div className="space-y-3">
-          {history.length === 0 && (
-            <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
-              No deployment history
-              {!process.env.NEXT_PUBLIC_SUPABASE_URL && ' — configure Supabase to enable history'}
-            </p>
+        <div className="space-y-6">
+          {/* Live running jobs */}
+          {runningJobs.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-yellow">
+                ● Live
+              </h2>
+              {runningJobs.map(job => {
+                const liveStages = jobStages[job.id]
+                const siteName = schedules.find(s => s.site === job.site)?.site_name ?? job.site
+                return (
+                  <RunningJobCard
+                    key={job.id}
+                    job={liveStages ? { ...job, ...liveStages } : job}
+                    logs={jobLogs[job.id] ?? []}
+                    siteName={siteName}
+                  />
+                )
+              })}
+            </div>
           )}
-          {history.map(item => <HistoryCard key={item.id} item={item} />)}
+
+          {/* Completed history */}
+          <div className="space-y-3">
+            {runningJobs.length > 0 && history.length > 0 && (
+              <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
+                Past
+              </h2>
+            )}
+            {history.length === 0 && runningJobs.length === 0 && (
+              <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
+                No deployment history
+                {!process.env.NEXT_PUBLIC_SUPABASE_URL && ' — configure Supabase to enable history'}
+              </p>
+            )}
+            {history.map(item => <HistoryCard key={item.id} item={item} />)}
+          </div>
         </div>
       )}
     </div>

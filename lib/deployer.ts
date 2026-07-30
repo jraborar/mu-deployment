@@ -5,7 +5,8 @@ import { createDeploymentRecord, finalizeDeploymentRecord } from '@/lib/supabase
 import { getPacificYYMMDD } from '@/lib/timezone'
 import {
   broadcastMessage,
-  buildStartedBlocks,
+  startDeploymentThread,
+  postThreadStep,
   buildApprovalBlocks,
   buildCompleteBlocks,
   buildFailedBlocks,
@@ -52,8 +53,11 @@ export async function executeJob(job: Job): Promise<void> {
     started_at: new Date(job.startedAt).toISOString(),
   })
 
-  let siteLabel = job.site
-  const startedAt = Date.now()
+  let siteLabel     = job.site
+  let slackThreadTs: string | null = null
+  const startedAt   = Date.now()
+
+  const postStep = (message: string) => { void postThreadStep(slackThreadTs, message) }
 
   let longRunningTimer: ReturnType<typeof setTimeout> | null = null
   let longRunningInterval: ReturnType<typeof setInterval> | null = null
@@ -92,6 +96,7 @@ export async function executeJob(job: Job): Promise<void> {
       throw new Error('Terminus is not authenticated. Check TERMINUS_TOKEN environment variable.')
     }
     log('info', `Authenticated as: ${identity}`)
+    postStep(`✓ Authenticated as ${identity}`)
 
     // 2. Validate site and resolve human-readable label for notifications
     log('status', `Validating site ${job.site}...`)
@@ -105,11 +110,7 @@ export async function executeJob(job: Job): Promise<void> {
       try { const d = JSON.parse(cleanedInfo.slice(jsonStart)); siteLabel = d?.label ?? d?.name ?? job.site } catch {}
     }
     log('info', `Site ${siteLabel} verified`)
-
-    void broadcastMessage(
-      buildStartedBlocks(job.source, job.destination, siteLabel),
-      `Deployment started: ${job.source} → ${job.destination} on ${siteLabel}`,
-    )
+    slackThreadTs = await startDeploymentThread(job.source, job.destination, siteLabel)
 
     // 3. Check uncommitted changes via JSON (structured, not fragile string matching)
     log('status', 'Checking for uncommitted changes...')
@@ -131,6 +132,7 @@ export async function executeJob(job: Job): Promise<void> {
       }
     }
     log('info', 'No uncommitted changes detected')
+    postStep('✓ No uncommitted changes in dev / test / live')
 
     // 3. Validate source and check git alignment (custom multidevs only)
     const stdEnvs = ['dev', 'test', 'live']
@@ -237,39 +239,49 @@ export async function executeJob(job: Job): Promise<void> {
       const oldSnap = findByPrefix(multidevList, snapPrefixes[stage])
       if (oldSnap) {
         log('delete', `Removing old snapshot ${oldSnap}...`)
+        postStep(`🗑 Removing old snapshot \`${oldSnap}\`...`)
         await run(`terminus multidev:delete --yes ${job.site}.${oldSnap} 2>&1`)
         log('deleted', `Removed ${oldSnap}`)
+        postStep(`✓ Removed \`${oldSnap}\``)
       }
 
       log('create', `Creating snapshot ${snapNames[stage]}...`)
+      postStep(`◈ Creating snapshot \`${snapNames[stage]}\`... _(this is the longest step — typically 30–45 min)_`)
       const snapResult = await runStream(
         `terminus multidev:create ${job.site}.${stage} ${snapNames[stage]} 2>&1`,
         (line) => log('info', line),
       )
       if (snapResult.code !== 0) throw new Error(`Snapshot creation failed`)
       log('info', `Snapshot ${snapNames[stage]} created`)
+      postStep(`✓ Snapshot \`${snapNames[stage]}\` created`)
 
       if (stage === 'dev') {
         log('status', `Merging ${job.source} into dev...`)
+        postStep(`◈ Merging \`${job.source}\` → dev...`)
         const r = await runStream(
           `terminus multidev:merge-to-dev --updatedb ${job.site}.${job.source} 2>&1`,
           (line) => log('info', line),
         )
         if (r.code !== 0) throw new Error(`Merge to dev failed`)
+        postStep(`✓ Merged to dev`)
       } else if (stage === 'test') {
         log('status', 'Deploying to test...')
+        postStep(`◈ Deploying to test...`)
         const r = await runStream(
           `terminus env:deploy --sync-content --updatedb --cc --note "Pantheon Managed Updates: Deployed from ${job.label}" ${job.site}.test 2>&1`,
           (line) => log('info', line),
         )
         if (r.code !== 0) throw new Error(`Deploy to test failed`)
+        postStep(`✓ Deployed to test`)
       } else if (stage === 'live') {
         log('status', 'Deploying to live...')
+        postStep(`◈ Deploying to live...`)
         const r = await runStream(
           `terminus env:deploy --updatedb --cc --note "Pantheon Managed Updates: Deployed from ${job.label}" ${job.site}.live 2>&1`,
           (line) => log('info', line),
         )
         if (r.code !== 0) throw new Error(`Deploy to live failed`)
+        postStep(`✓ Deployed to live`)
       }
 
       job.currentStage = null
@@ -311,7 +323,7 @@ export async function executeJob(job: Job): Promise<void> {
             )
             await finalizeDeploymentRecord(job.id, {
               stages_completed: job.completedStages, status: 'paused',
-              completed_at: new Date().toISOString(), logs: job.logs,
+              completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel,
             })
             return
           }
@@ -322,9 +334,11 @@ export async function executeJob(job: Job): Promise<void> {
     }
 
     job.status = 'completed'
+    const elapsedMin = Math.round((Date.now() - startedAt) / 60000)
     log('success', `Deployment complete: ${job.source} → ${job.destination} on ${siteLabel}`)
     emit({ type: 'complete', status: 'completed' })
     job.emitter.emit('done')
+    postStep(`✅ *All done* — ${job.completedStages.join(' → ')} completed in ${elapsedMin} min`)
     void broadcastMessage(
       buildCompleteBlocks(job.source, job.destination, siteLabel, job.completedStages),
       `Deployment complete: ${job.source} → ${job.destination} on ${siteLabel}`,
@@ -332,7 +346,7 @@ export async function executeJob(job: Job): Promise<void> {
 
     await finalizeDeploymentRecord(job.id, {
       stages_completed: job.completedStages, status: 'completed',
-      completed_at: new Date().toISOString(), logs: job.logs,
+      completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel,
     })
   } catch (err) {
     const isCancelled = err instanceof CancelledError
@@ -347,6 +361,7 @@ export async function executeJob(job: Job): Promise<void> {
     emit({ type: 'complete', status })
     job.emitter.emit('done')
     if (!isCancelled) {
+      postStep(`❌ *Failed:* ${err instanceof Error ? err.message : String(err)}`)
       void broadcastMessage(
         buildFailedBlocks(job.source, job.destination, siteLabel, err instanceof Error ? err.message : String(err)),
         `Deployment failed: ${job.source} → ${job.destination} on ${siteLabel}`,
@@ -355,7 +370,7 @@ export async function executeJob(job: Job): Promise<void> {
 
     await finalizeDeploymentRecord(job.id, {
       stages_completed: job.completedStages, status,
-      completed_at: new Date().toISOString(), logs: job.logs,
+      completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel,
     })
   } finally {
     stopLongRunningAlerts()
