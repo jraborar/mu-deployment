@@ -23,7 +23,7 @@ export interface DeploymentRecord {
   status: string
   started_at: string
   completed_at: string | null
-  logs: object[]
+  logs?: object[]
 }
 
 export interface ScheduleRecord {
@@ -69,7 +69,7 @@ export async function listDeployments(limit = 20): Promise<DeploymentRecord[]> {
   if (!db) return []
   const { data, error } = await db
     .from('deployment_history')
-    .select('*')
+    .select('id, site, site_name, source, destination, stages_completed, status, started_at, completed_at')
     .order('started_at', { ascending: false })
     .limit(limit)
   if (error) console.error('[supabase] listDeployments:', error.message)
