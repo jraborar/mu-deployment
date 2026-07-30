@@ -16,6 +16,7 @@ function getClient(): SupabaseClient | null {
 
 export interface DeploymentRecord {
   site: string
+  site_name?: string
   source: string
   destination: string
   stages_completed: string[]
@@ -49,7 +50,7 @@ export async function createDeploymentRecord(id: string, data: Omit<DeploymentRe
   if (error) console.error('[supabase] createDeploymentRecord:', error.message)
 }
 
-export async function finalizeDeploymentRecord(id: string, updates: Pick<DeploymentRecord, 'status' | 'stages_completed' | 'completed_at' | 'logs'>): Promise<void> {
+export async function finalizeDeploymentRecord(id: string, updates: Pick<DeploymentRecord, 'status' | 'stages_completed' | 'completed_at' | 'logs'> & { site_name?: string }): Promise<void> {
   const db = getClient()
   if (!db) return
   const { error } = await db.from('deployment_history').update(updates).eq('id', id)

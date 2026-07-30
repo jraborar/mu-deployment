@@ -70,6 +70,47 @@ async function postPumbleMessage(blocks: (Block | KnownBlock)[], text: string): 
   }
 }
 
+// ── Thread support ────────────────────────────────────────────────────────────
+
+// Posts the deployment started message to Slack and returns its ts for threading.
+// Also broadcasts to Pumble (no threading needed there).
+export async function startDeploymentThread(
+  source: string, destination: string, site: string
+): Promise<string | null> {
+  const text   = `🚀 Deployment started: ${source} → ${destination} on ${site}`
+  const blocks = buildStartedBlocks(source, destination, site)
+  void postPumbleMessage(blocks, text)
+  const web = getWeb()
+  if (web && SLACK_CHANNEL_ID) {
+    try {
+      const result = await web.chat.postMessage({
+        channel: SLACK_CHANNEL_ID, text, blocks,
+        username: BOT_NAME, icon_url: PANTHEON_ICON,
+      })
+      return (result.ts as string) ?? null
+    } catch (err) { console.error('[slack] startDeploymentThread failed:', err) }
+  } else if (SLACK_WEBHOOK_URL) {
+    void postSlackMessage(blocks, text)
+  }
+  return null
+}
+
+// Posts a step update as a thread reply on the deployment started message.
+export async function postThreadStep(threadTs: string | null, message: string): Promise<void> {
+  if (!threadTs) return
+  const web = getWeb()
+  if (!web || !SLACK_CHANNEL_ID) return
+  try {
+    await web.chat.postMessage({
+      channel: SLACK_CHANNEL_ID,
+      thread_ts: threadTs,
+      text: message,
+      username: BOT_NAME,
+      icon_url: PANTHEON_ICON,
+    })
+  } catch (err) { console.error('[slack] postThreadStep failed:', err) }
+}
+
 // ── Broadcast to all configured platforms ─────────────────────────────────────
 
 export async function broadcastMessage(blocks: (Block | KnownBlock)[], text: string): Promise<void> {
