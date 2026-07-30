@@ -1,11 +1,14 @@
 #!/bin/sh
 set -e
 
-# Authenticate Terminus with machine token
+# Authenticate Terminus with machine token (non-fatal — Next.js starts regardless)
 if [ -n "$TERMINUS_TOKEN" ]; then
   echo "[startup] Authenticating Terminus..."
-  terminus auth:login --machine-token="$TERMINUS_TOKEN"
-  echo "[startup] Terminus authenticated as: $(terminus auth:whoami)"
+  if terminus auth:login --machine-token="$TERMINUS_TOKEN" 2>&1; then
+    echo "[startup] Terminus authenticated as: $(terminus auth:whoami 2>/dev/null || echo 'unknown')"
+  else
+    echo "[startup] WARNING: Terminus auth failed — deployments may fail until Pantheon API recovers"
+  fi
 else
   echo "[startup] WARNING: TERMINUS_TOKEN not set — deployments will fail"
 fi
