@@ -11,6 +11,7 @@ export interface LogEntry {
 export interface Job {
   id: string
   site: string
+  site_name?: string
   source: string
   destination: string
   stages: string[]
@@ -38,6 +39,7 @@ const store = new Map<string, Job>()
 
 export function createJob(params: {
   site: string
+  site_name?: string
   source: string
   destination: string
   stages: string[]
@@ -52,6 +54,7 @@ export function createJob(params: {
   const job: Job = {
     id: randomUUID(),
     site: params.site,
+    site_name: params.site_name,
     source: params.source,
     destination: params.destination,
     stages: params.stages,
