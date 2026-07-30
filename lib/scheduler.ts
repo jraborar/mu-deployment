@@ -31,6 +31,7 @@ export async function runDueSchedules(): Promise<{ triggered: number; skipped: n
 
     const job = createJob({
       site: schedule.site,
+      site_name: schedule.site_name ?? undefined,
       source: schedule.source,
       destination: schedule.destination,
       stages,

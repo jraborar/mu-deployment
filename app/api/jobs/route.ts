@@ -8,6 +8,7 @@ export async function GET() {
     .map(j => ({
       id:              j.id,
       site:            j.site,
+      site_name:       j.site_name,
       source:          j.source,
       destination:     j.destination,
       status:          j.status,

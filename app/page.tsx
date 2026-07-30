@@ -31,6 +31,7 @@ interface ScheduleItem {
 interface RunningJobItem {
   id: string
   site: string
+  site_name?: string
   source: string
   destination: string
   status: string
@@ -318,16 +319,25 @@ function HistoryCard({ item }: { item: HistoryItem }) {
     cancelled: 'text-pantheon-text-muted',
     running:   'text-pantheon-info animate-pulse',
   }
+  const siteColor = statusColors[item.status] ?? 'text-pantheon-text-muted'
+  const endLabel  = item.status === 'failed' ? 'Exited:' : 'Completed:'
   const fmt = (ts: string) =>
     new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 
   return (
     <div className="rounded-lg border border-pantheon-border bg-pantheon-bg-elevated p-4 space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-sm font-semibold text-pantheon-text truncate mr-4">
-          {item.site_name ?? item.site}
-        </span>
-        <span className={`font-mono text-xs font-semibold shrink-0 ${statusColors[item.status] ?? 'text-pantheon-text-muted'}`}>
+        <div className="truncate mr-4">
+          {item.site_name ? (
+            <span className={`font-mono text-sm font-semibold ${siteColor}`}>
+              {item.site_name}
+              <span className="ml-1.5 font-normal text-pantheon-text-dim text-xs">· {item.site}</span>
+            </span>
+          ) : (
+            <span className={`font-mono text-sm font-semibold ${siteColor}`}>{item.site}</span>
+          )}
+        </div>
+        <span className={`font-mono text-xs font-semibold shrink-0 ${siteColor}`}>
           {item.status}
         </span>
       </div>
@@ -341,9 +351,9 @@ function HistoryCard({ item }: { item: HistoryItem }) {
           </span>
         )}
       </div>
-      <div className="flex flex-wrap gap-x-4 font-mono text-xs text-pantheon-text-dim">
-        <span><span className="text-pantheon-text-muted">Started:</span> {fmt(item.started_at)}</span>
-        <span><span className="text-pantheon-text-muted">Completed:</span> {item.completed_at ? fmt(item.completed_at) : '—'}</span>
+      <div className={`flex flex-wrap gap-x-4 font-mono text-xs ${siteColor}`}>
+        <span>Started: {fmt(item.started_at)}</span>
+        <span>{endLabel} {item.completed_at ? fmt(item.completed_at) : '—'}</span>
       </div>
     </div>
   )
@@ -354,7 +364,7 @@ function RunningJobCard({
 }: {
   job: RunningJobItem
   logs: LogEntry[]
-  siteName: string
+  siteName: string  // human-readable label (may equal site UUID if unresolved)
 }) {
   const logRef = useRef<HTMLDivElement>(null)
   const elapsedMin = Math.floor((Date.now() - job.startedAt) / 60000)
@@ -368,7 +378,14 @@ function RunningJobCard({
     <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card p-4 space-y-3 animate-fade-in">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <div className="font-mono text-sm font-semibold text-pantheon-text">{siteName}</div>
+          {siteName !== job.site ? (
+            <div className="font-mono text-sm font-semibold text-pantheon-info">
+              {siteName}
+              <span className="ml-1.5 font-normal text-pantheon-text-dim text-xs">· {job.site}</span>
+            </div>
+          ) : (
+            <div className="font-mono text-sm font-semibold text-pantheon-info">{job.site}</div>
+          )}
           <div className="font-mono text-xs">
             <span className="text-pantheon-yellow">{job.source}</span>
             <span className="mx-1.5 text-pantheon-text-dim">→</span>
@@ -1320,7 +1337,7 @@ export default function Page() {
               </h2>
               {runningJobs.map(job => {
                 const liveStages = jobStages[job.id]
-                const siteName = schedules.find(s => s.site === job.site)?.site_name ?? job.site
+                const siteName = job.site_name ?? schedules.find(s => s.site === job.site)?.site_name ?? job.site
                 return (
                   <RunningJobCard
                     key={job.id}

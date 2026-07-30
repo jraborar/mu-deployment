@@ -323,7 +323,7 @@ export async function executeJob(job: Job): Promise<void> {
             )
             await finalizeDeploymentRecord(job.id, {
               stages_completed: job.completedStages, status: 'paused',
-              completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel,
+              completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel !== job.site ? siteLabel : undefined,
             })
             return
           }
@@ -346,7 +346,7 @@ export async function executeJob(job: Job): Promise<void> {
 
     await finalizeDeploymentRecord(job.id, {
       stages_completed: job.completedStages, status: 'completed',
-      completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel,
+      completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel !== job.site ? siteLabel : undefined,
     })
   } catch (err) {
     const isCancelled = err instanceof CancelledError
@@ -370,7 +370,7 @@ export async function executeJob(job: Job): Promise<void> {
 
     await finalizeDeploymentRecord(job.id, {
       stages_completed: job.completedStages, status,
-      completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel,
+      completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel !== job.site ? siteLabel : undefined,
     })
   } finally {
     stopLongRunningAlerts()
