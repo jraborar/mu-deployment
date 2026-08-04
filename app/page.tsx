@@ -360,13 +360,15 @@ function HistoryCard({ item }: { item: HistoryItem }) {
 }
 
 function RunningJobCard({
-  job, logs, siteName,
+  job, logs, siteName, onEvict,
 }: {
   job: RunningJobItem
   logs: LogEntry[]
   siteName: string  // human-readable label (may equal site UUID if unresolved)
+  onEvict?: () => void
 }) {
   const logRef = useRef<HTMLDivElement>(null)
+  const [confirming, setConfirming] = useState(false)
   const elapsedMin = Math.floor((Date.now() - job.startedAt) / 60000)
 
   useEffect(() => {
@@ -395,6 +397,26 @@ function RunningJobCard({
         <div className="text-right space-y-0.5">
           <div className="font-mono text-xs text-pantheon-info animate-pulse">● running</div>
           <div className="font-mono text-xs text-pantheon-text-dim">{elapsedMin} min elapsed</div>
+          {onEvict && (
+            confirming ? (
+              <div className="flex gap-1 justify-end items-center">
+                <span className="font-mono text-xs text-pantheon-error">Force stop?</span>
+                <button
+                  onClick={() => { setConfirming(false); onEvict() }}
+                  className="rounded border border-pantheon-error/40 px-2 py-0.5 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
+                >Yes</button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="rounded border border-pantheon-border px-2 py-0.5 font-mono text-xs text-pantheon-text-muted hover:bg-pantheon-bg-elevated transition-colors"
+                >No</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirming(true)}
+                className="font-mono text-xs text-pantheon-error/60 hover:text-pantheon-error transition-colors"
+              >✕ Force Stop</button>
+            )
+          )}
         </div>
       </div>
 
@@ -845,6 +867,12 @@ export default function Page() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved }),
     })
+  }
+
+  const evictJob = async (id: string) => {
+    await fetch(`/api/deploy/${id}/evict`, { method: 'POST' })
+    setRunningJobs(prev => prev.filter(j => j.id !== id))
+    fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
   }
 
   const cancelDeployment = async () => {
@@ -1350,6 +1378,7 @@ export default function Page() {
                       job={liveStages ? { ...job, ...liveStages } : job}
                       logs={jobLogs[job.id] ?? []}
                       siteName={siteName}
+                      onEvict={() => evictJob(job.id)}
                     />
                   )
                 })}
