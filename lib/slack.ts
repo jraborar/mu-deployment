@@ -185,13 +185,13 @@ export function buildUpcomingBlocks(source: string, destination: string, site: s
 }
 
 export function buildScheduledBlocks(source: string, destination: string, site: string, scheduledFor: string, notes?: string, siteId?: string): (Block | KnownBlock)[] {
-  const dt = new Date(scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+  const dt = new Date(scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' })
   const notesLine = notes ? `\n_${notes}_` : ''
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `📅 *Deployment scheduled*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n${dt}${notesLine}`,
+      text: `📅 *Deployment scheduled*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n${dt} (Manila)${notesLine}`,
     },
   }]
 }
