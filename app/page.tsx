@@ -360,17 +360,11 @@ function HistoryCard({ item }: { item: HistoryItem }) {
 }
 
 function RunningJobCard({
-  job, logs, siteName, approvalType, approvalMsg, nextStage, diffStat, onApprove, onReject,
+  job, logs, siteName,
 }: {
   job: RunningJobItem
   logs: LogEntry[]
   siteName: string  // human-readable label (may equal site UUID if unresolved)
-  approvalType?: ApprovalType | null
-  approvalMsg?: string
-  nextStage?: string | null
-  diffStat?: string
-  onApprove?: () => void
-  onReject?: () => void
 }) {
   const logRef = useRef<HTMLDivElement>(null)
   const elapsedMin = Math.floor((Date.now() - job.startedAt) / 60000)
@@ -399,9 +393,7 @@ function RunningJobCard({
           </div>
         </div>
         <div className="text-right space-y-0.5">
-          <div className={`font-mono text-xs animate-pulse ${job.status === 'awaiting-approval' ? 'text-pantheon-yellow' : 'text-pantheon-info'}`}>
-            ● {job.status === 'awaiting-approval' ? 'awaiting approval' : 'running'}
-          </div>
+          <div className="font-mono text-xs text-pantheon-info animate-pulse">● running</div>
           <div className="font-mono text-xs text-pantheon-text-dim">{elapsedMin} min elapsed</div>
         </div>
       </div>
@@ -424,18 +416,6 @@ function RunningJobCard({
             )
           })}
         </div>
-      )}
-
-      {/* Approval prompt */}
-      {approvalType && onApprove && onReject && (
-        <ApprovalPrompt
-          approvalType={approvalType}
-          message={approvalMsg ?? ''}
-          diffStat={diffStat}
-          nextStage={nextStage}
-          onApprove={onApprove}
-          onReject={onReject}
-        />
       )}
 
       {/* Live log */}
@@ -569,16 +549,7 @@ export default function Page() {
   // Running jobs (scheduled deployments with live SSE)
   const [runningJobs, setRunningJobs]   = useState<RunningJobItem[]>([])
   const [jobLogs, setJobLogs]           = useState<Record<string, LogEntry[]>>({})
-  const [jobStages, setJobStages]       = useState<Record<string, {
-    stages: string[]
-    completedStages: string[]
-    currentStage: string | null
-    status: string
-    approvalType?: string | null
-    approvalMsg?: string
-    nextStage?: string | null
-    diffStat?: string
-  }>>({})
+  const [jobStages, setJobStages]       = useState<Record<string, Pick<RunningJobItem, 'stages' | 'completedStages' | 'currentStage' | 'status'>>>({})
   const sseConnections = useRef<Record<string, EventSource>>({})
 
   const [resetCountdown, setResetCountdown] = useState<number | null>(null)
@@ -682,24 +653,10 @@ export default function Page() {
             setJobStages(prev => ({
               ...prev,
               [job.id]: {
-                ...prev[job.id],
                 stages:          (data.stages as string[]) ?? prev[job.id]?.stages ?? [],
                 completedStages: (data.completedStages as string[]) ?? prev[job.id]?.completedStages ?? [],
                 currentStage:    (data.currentStage as string | null) ?? prev[job.id]?.currentStage ?? null,
                 status:          (data.status as string) ?? prev[job.id]?.status ?? 'running',
-              },
-            }))
-          }
-          if (data.type === 'awaiting-approval') {
-            setJobStages(prev => ({
-              ...prev,
-              [job.id]: {
-                ...(prev[job.id] ?? { stages: [], completedStages: [], currentStage: null }),
-                status:       'awaiting-approval',
-                approvalType: data.approvalType as string,
-                approvalMsg:  data.message      as string,
-                nextStage:    (data.nextStage   as string) ?? null,
-                diffStat:     data.diffStat     as string | undefined,
               },
             }))
           }
@@ -887,20 +844,6 @@ export default function Page() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved }),
-    })
-  }
-
-  const sendJobApproval = async (id: string, approved: boolean) => {
-    await fetch(`/api/approve/${id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved }),
-    })
-    setJobStages(prev => {
-      if (!prev[id]) return prev
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { approvalType: _a, approvalMsg: _b, nextStage: _c, diffStat: _d, ...rest } = prev[id]
-      return { ...prev, [id]: { ...rest, status: 'running' } }
     })
   }
 
@@ -1401,14 +1344,6 @@ export default function Page() {
                     job={liveStages ? { ...job, ...liveStages } : job}
                     logs={jobLogs[job.id] ?? []}
                     siteName={siteName}
-                    approvalType={(liveStages?.approvalType as ApprovalType) ?? null}
-                    approvalMsg={liveStages?.approvalMsg}
-                    nextStage={liveStages?.nextStage}
-                    diffStat={liveStages?.diffStat}
-                    onApprove={liveStages?.status === 'awaiting-approval'
-                      ? () => sendJobApproval(job.id, true) : undefined}
-                    onReject={liveStages?.status === 'awaiting-approval'
-                      ? () => sendJobApproval(job.id, false) : undefined}
                   />
                 )
               })}
