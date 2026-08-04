@@ -1327,46 +1327,54 @@ export default function Page() {
       )}
 
       {/* ── History tab ─────────────────────────────────────────────────────── */}
-      {tab === 'history' && (
-        <div className="space-y-6">
-          {/* Live running jobs */}
-          {runningJobs.length > 0 && (
-            <div className="space-y-3">
-              <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-yellow">
-                ● Live
-              </h2>
-              {runningJobs.map(job => {
-                const liveStages = jobStages[job.id]
-                const siteName = job.site_name ?? schedules.find(s => s.site === job.site)?.site_name ?? job.site
-                return (
-                  <RunningJobCard
-                    key={job.id}
-                    job={liveStages ? { ...job, ...liveStages } : job}
-                    logs={jobLogs[job.id] ?? []}
-                    siteName={siteName}
-                  />
-                )
-              })}
-            </div>
-          )}
+      {tab === 'history' && (() => {
+        const inMemoryIds    = new Set(runningJobs.map(j => j.id))
+        // Supabase records marked running but not tracked in this server's memory
+        const orphanedRunning = history.filter(item => item.status === 'running' && !inMemoryIds.has(item.id))
+        const pastHistory     = history.filter(item => item.status !== 'running')
+        const hasLive         = runningJobs.length > 0 || orphanedRunning.length > 0
+        return (
+          <div className="space-y-6">
+            {/* Live — in-memory jobs + orphaned Supabase running records */}
+            {hasLive && (
+              <div className="space-y-3">
+                <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-yellow">
+                  ● Live
+                </h2>
+                {runningJobs.map(job => {
+                  const liveStages = jobStages[job.id]
+                  const siteName = job.site_name ?? schedules.find(s => s.site === job.site)?.site_name ?? job.site
+                  return (
+                    <RunningJobCard
+                      key={job.id}
+                      job={liveStages ? { ...job, ...liveStages } : job}
+                      logs={jobLogs[job.id] ?? []}
+                      siteName={siteName}
+                    />
+                  )
+                })}
+                {orphanedRunning.map(item => <HistoryCard key={item.id} item={item} />)}
+              </div>
+            )}
 
-          {/* Completed history */}
-          <div className="space-y-3">
-            {runningJobs.length > 0 && history.length > 0 && (
-              <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
-                Past
-              </h2>
-            )}
-            {history.length === 0 && runningJobs.length === 0 && (
-              <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
-                No deployment history
-                {!process.env.NEXT_PUBLIC_SUPABASE_URL && ' — configure Supabase to enable history'}
-              </p>
-            )}
-            {history.map(item => <HistoryCard key={item.id} item={item} />)}
+            {/* Past */}
+            <div className="space-y-3">
+              {hasLive && pastHistory.length > 0 && (
+                <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
+                  Past
+                </h2>
+              )}
+              {!hasLive && pastHistory.length === 0 && (
+                <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
+                  No deployment history
+                  {!process.env.NEXT_PUBLIC_SUPABASE_URL && ' — configure Supabase to enable history'}
+                </p>
+              )}
+              {pastHistory.map(item => <HistoryCard key={item.id} item={item} />)}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
