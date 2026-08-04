@@ -3,17 +3,19 @@ import { WebClient } from '@slack/web-api'
 
 export const runtime = 'nodejs'
 
-// One-shot migration: finds past Slack messages that mention a site by UUID only
-// and edits them to include the human-readable site name alongside the ID.
+// One-shot migration: posts a correction summary to Slack listing all historical
+// deployments with both site name and site ID. Uses only chat:write — no
+// channels:history scope needed, so old messages are not edited.
 //
-// Only works for Slack (Bot Token + channel). Pumble uses an incoming webhook
-// with no update API, so past Pumble messages cannot be retroactively edited.
+// Pumble is also notified via the existing webhook if configured.
 //
 // Requires CRON_SECRET to be set — call with:
 //   curl -X POST https://<host>/api/admin/backfill-slack \
 //     -H "Authorization: Bearer <CRON_SECRET>"
 
-const SEARCH_WINDOW_SEC = 300 // ±5 minutes around started_at
+const PUMBLE_WEBHOOK_URL = process.env.PUMBLE_WEBHOOK_URL ?? ''
+const BOT_NAME           = 'Pantheon MU Deployment'
+const PANTHEON_ICON      = 'https://avatars.githubusercontent.com/u/1043537'
 
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET
@@ -30,101 +32,79 @@ export async function POST(request: Request) {
   const ch  = process.env.SLACK_CHANNEL_ID ?? ''
 
   if (!url || !key) return Response.json({ error: 'Supabase not configured' }, { status: 503 })
-  if (!bot || !ch)  return Response.json({ error: 'Slack Bot Token / Channel ID not configured — Pumble-only setups cannot update past messages' }, { status: 503 })
 
-  const db    = createClient(url, key)
-  const slack = new WebClient(bot)
+  const db = createClient(url, key)
 
-  // Fetch records that have a resolved site_name — column-to-column inequality
-  // is handled in JS below since PostgREST doesn't support it directly.
+  // Records where site_name is resolved and different from the raw site ID
   const { data: records, error } = await db
     .from('deployment_history')
-    .select('id, site, site_name, source, destination, started_at')
+    .select('id, site, site_name, source, destination, started_at, status')
     .not('site_name', 'is', null)
-    .order('started_at', { ascending: false })
+    .order('started_at', { ascending: true })
     .limit(200)
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
-  // Filter to records where site_name is meaningfully different from site
-  const targets = (records ?? []).filter(
-    r => r.site_name && r.site_name !== r.site
+  const targets = (records ?? []).filter(r => r.site_name && r.site_name !== r.site)
+
+  if (targets.length === 0) {
+    return Response.json({ message: 'No records to backfill — all deployments already have site name = site ID or no name resolved.' })
+  }
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })
+
+  const lines = targets.map(r =>
+    `• *${r.site_name}* (\`${r.site}\`) — \`${r.source} → ${r.destination}\` · ${fmt(r.started_at)} · _${r.status}_`
   )
 
-  let checked = 0
-  let updated = 0
-  const skipped: string[] = []
+  const text = `📋 *Site ID ↔ Name Reference — Historical Deployments*\nPast notifications showed only the site ID. Here is the full mapping:\n\n${lines.join('\n')}`
 
-  for (const rec of targets) {
-    const startedTs = new Date(rec.started_at).getTime() / 1000
-    const oldest    = String(startedTs - SEARCH_WINDOW_SEC)
-    const latest    = String(startedTs + SEARCH_WINDOW_SEC)
+  const blocks = [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `📋 *Site ID ↔ Name Reference — Historical Deployments*\nPast notifications showed only the site ID. Here is the full mapping:` },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: lines.join('\n') },
+    },
+  ]
 
-    let messages: { ts?: string; text?: string; blocks?: unknown[] }[] = []
+  const posted: string[] = []
+  const failed: string[] = []
+
+  // Post to Slack
+  if (bot && ch) {
     try {
-      const res = await slack.conversations.history({
-        channel: ch,
-        oldest,
-        latest,
-        limit: 20,
+      const slack = new WebClient(bot)
+      await slack.chat.postMessage({
+        channel: ch, text, blocks,
+        username: BOT_NAME, icon_url: PANTHEON_ICON,
       })
-      messages = (res.messages ?? []) as typeof messages
+      posted.push('Slack')
     } catch (err) {
-      skipped.push(`${rec.id}: history fetch failed — ${String(err)}`)
-      continue
+      failed.push(`Slack: ${String(err)}`)
     }
+  } else {
+    failed.push('Slack: SLACK_BOT_TOKEN or SLACK_CHANNEL_ID not configured')
+  }
 
-    for (const msg of messages) {
-      if (!msg.ts || !msg.text) continue
-      if (!msg.text.includes(rec.site)) continue
-
-      checked++
-      const replacement = `${rec.site_name} (\`${rec.site}\`)`
-      // Replace backtick-wrapped UUID: `<uuid>` → SiteName (`<uuid>`)
-      const newText = msg.text.replace(new RegExp(`\`${rec.site}\``, 'g'), replacement)
-
-      // Rebuild blocks with the same replacement applied to mrkdwn text fields
-      const newBlocks = rebuildBlocks(msg.blocks, rec.site, replacement)
-
-      try {
-        await slack.chat.update({
-          channel: ch,
-          ts: msg.ts,
-          text: newText,
-          ...(newBlocks.length ? { blocks: newBlocks } : {}),
-        })
-        updated++
-      } catch (err) {
-        skipped.push(`ts=${msg.ts}: update failed — ${String(err)}`)
-      }
+  // Post to Pumble
+  if (PUMBLE_WEBHOOK_URL) {
+    try {
+      const res = await fetch(PUMBLE_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, blocks, username: BOT_NAME, icon_url: PANTHEON_ICON }),
+      })
+      if (res.ok) posted.push('Pumble')
+      else failed.push(`Pumble: HTTP ${res.status}`)
+    } catch (err) {
+      failed.push(`Pumble: ${String(err)}`)
     }
   }
 
-  return Response.json({
-    targets: targets.length,
-    checked,
-    updated,
-    skipped,
-    note: 'Pumble messages cannot be retroactively updated (no update API on incoming webhooks).',
-  })
-}
-
-function rebuildBlocks(blocks: unknown[] | undefined, siteId: string, replacement: string): unknown[] {
-  if (!blocks) return []
-  return blocks.map(block => {
-    const b = block as Record<string, unknown>
-    if (b.type === 'section' && b.text) {
-      const t = b.text as Record<string, unknown>
-      if (typeof t.text === 'string') {
-        return {
-          ...b,
-          text: {
-            ...t,
-            text: t.text.replace(new RegExp(`\`${siteId}\``, 'g'), replacement),
-          },
-        }
-      }
-    }
-    return block
-  })
+  return Response.json({ records: targets.length, posted, failed })
 }
