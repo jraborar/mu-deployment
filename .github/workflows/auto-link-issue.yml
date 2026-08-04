@@ -15,35 +15,66 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const pr     = context.payload.pull_request
-            const body   = pr.body || ''
+            const pr   = context.payload.pull_request
+            const body = pr.body || ''
 
-            // Skip if the PR already has a closing keyword
+            // Skip if the PR already references an issue
             if (/\b(closes|fixes|resolves)\s+#\d+/i.test(body)) {
-              console.log('PR already has a closing keyword — skipping auto-create.')
+              console.log('PR already has a closing keyword — skipping.')
               return
             }
 
-            // Create the issue using the PR title and body as a starting point
+            // Extract bullet points from ## Summary and turn them into checkboxes.
+            // Falls back to the full PR body if no Summary section is found.
+            function buildIssueBody(prBody, prNumber) {
+              const summaryMatch = prBody.match(/##\s*Summary\s*\n([\s\S]*?)(?=\n##\s|\s*$)/)
+              let tasks = ''
+
+              if (summaryMatch) {
+                const bullets = summaryMatch[1].match(/^[ \t]*[-*]\s+.+/gm)
+                if (bullets && bullets.length > 0) {
+                  tasks = bullets
+                    .map(b => b.replace(/^[ \t]*[-*]\s+/, '- [ ] '))
+                    .join('\n')
+                }
+              }
+
+              const lines = [`Tracks changes introduced in PR #${prNumber}.`, '']
+
+              if (tasks) {
+                lines.push('## Tasks', tasks)
+              } else {
+                // No Summary bullets — use the raw PR body as context
+                const stripped = prBody
+                  .replace(/\bCloses\s+#\d+/gi, '')
+                  .trim()
+                if (stripped) lines.push(stripped)
+              }
+
+              return lines.join('\n')
+            }
+
+            const issueBody = buildIssueBody(body, pr.number)
+
             const { data: issue } = await github.rest.issues.create({
               owner: context.repo.owner,
-              repo: context.repo.repo,
+              repo:  context.repo.repo,
               title: pr.title,
-              body: `Tracks changes introduced in PR #${pr.number}.\n\n${body}`.trim(),
+              body:  issueBody,
             })
 
             console.log(`Created issue #${issue.number}`)
 
-            // Append Closes keyword to the PR description
-            const updated = body
+            // Append Closes keyword to the PR body
+            const updatedBody = body
               ? `${body}\n\nCloses #${issue.number}`
               : `Closes #${issue.number}`
 
             await github.rest.pulls.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner:       context.repo.owner,
+              repo:        context.repo.repo,
               pull_number: pr.number,
-              body: updated,
+              body:        updatedBody,
             })
 
-            console.log(`PR #${pr.number} updated with Closes #${issue.number}`)
+            console.log(`PR #${pr.number} linked to issue #${issue.number}`)
