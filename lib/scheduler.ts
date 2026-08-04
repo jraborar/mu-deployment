@@ -1,10 +1,37 @@
-import { claimDueSchedules, claimPreNotifications } from '@/lib/supabase'
+import { claimDueSchedules, claimPreNotifications, finalizeDeploymentRecord } from '@/lib/supabase'
 import { computeStages } from '@/lib/pipeline'
-import { createJob } from '@/lib/jobStore'
+import { createJob, getAllJobs } from '@/lib/jobStore'
 import { executeJob } from '@/lib/deployer'
 import { broadcastMessage, buildUpcomingBlocks } from '@/lib/slack'
 
+const STALE_JOB_MS = 24 * 60 * 60 * 1000
+
+async function pruneStaleJobs(): Promise<void> {
+  const now = Date.now()
+  const stale = getAllJobs().filter(j =>
+    ['running', 'awaiting-approval'].includes(j.status) &&
+    now - j.startedAt > STALE_JOB_MS
+  )
+  for (const job of stale) {
+    job.status = 'failed'
+    const entry = { type: 'log' as const, logType: 'error' as const, message: 'Job automatically failed after 24 hours with no completion', ts: Date.now() }
+    job.logs.push(entry)
+    job.emitter.emit('event', entry)
+    job.emitter.emit('event', { type: 'complete', status: 'failed' })
+    job.emitter.emit('done')
+    await finalizeDeploymentRecord(job.id, {
+      stages_completed: job.completedStages,
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      logs: job.logs,
+      site_name: job.site_name,
+    })
+    console.log(`[scheduler] Pruned stale job ${job.id} (${job.site} ${job.source} → ${job.destination}, running since ${new Date(job.startedAt).toISOString()})`)
+  }
+}
+
 export async function runDueSchedules(): Promise<{ triggered: number; skipped: number }> {
+  await pruneStaleJobs()
   // Send 10-minute pre-notifications for upcoming schedules
   const upcoming = await claimPreNotifications()
   for (const s of upcoming) {

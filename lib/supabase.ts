@@ -106,17 +106,24 @@ export async function updateSchedule(id: string, updates: Partial<Pick<ScheduleR
   if (error) console.error('[supabase] updateSchedule:', error.message)
 }
 
-// Marks any records stuck as 'running' from a crashed/restarted server instance as failed.
-// Safe to call on every startup — a running record with no in-memory counterpart is always orphaned.
-export async function cleanupStaleRunningRecords(): Promise<number> {
+// Marks orphaned 'running' records from a crashed/restarted server as failed.
+// Skips records started within the last GRACE_HOURS hours — those may still be
+// running on Pantheon's side even if this server lost track of them.
+const STALE_GRACE_HOURS = 6
+export async function cleanupStaleRunningRecords(activeJobIds: string[] = []): Promise<number> {
   const db = getClient()
   if (!db) return 0
-  const { data, error } = await db
+  const cutoff = new Date(Date.now() - STALE_GRACE_HOURS * 60 * 60 * 1000).toISOString()
+  let query = db
     .from('deployment_history')
     .update({ status: 'failed', completed_at: new Date().toISOString() })
     .eq('status', 'running')
     .is('completed_at', null)
-    .select('id')
+    .lt('started_at', cutoff)
+  if (activeJobIds.length > 0) {
+    query = query.not('id', 'in', `(${activeJobIds.join(',')})`)
+  }
+  const { data, error } = await query.select('id')
   if (error) console.error('[supabase] cleanupStaleRunningRecords:', error.message)
   return data?.length ?? 0
 }
