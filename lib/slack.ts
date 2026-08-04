@@ -75,10 +75,10 @@ async function postPumbleMessage(blocks: (Block | KnownBlock)[], text: string): 
 // Posts the deployment started message to Slack and returns its ts for threading.
 // Also broadcasts to Pumble (no threading needed there).
 export async function startDeploymentThread(
-  source: string, destination: string, site: string
+  source: string, destination: string, site: string, siteId?: string
 ): Promise<string | null> {
   const text   = `🚀 Deployment started: ${source} → ${destination} on ${site}`
-  const blocks = buildStartedBlocks(source, destination, site)
+  const blocks = buildStartedBlocks(source, destination, site, siteId)
   void postPumbleMessage(blocks, text)
   const web = getWeb()
   if (web && SLACK_CHANNEL_ID) {
@@ -93,6 +93,19 @@ export async function startDeploymentThread(
     void postSlackMessage(blocks, text)
   }
   return null
+}
+
+// Posts rich blocks as a thread reply. Falls back silently if no thread ts or Web API unavailable.
+export async function postThreadBlocks(threadTs: string | null, blocks: (Block | KnownBlock)[], text: string): Promise<void> {
+  if (!threadTs) return
+  const web = getWeb()
+  if (!web || !SLACK_CHANNEL_ID) return
+  try {
+    await web.chat.postMessage({
+      channel: SLACK_CHANNEL_ID, thread_ts: threadTs, text, blocks,
+      username: BOT_NAME, icon_url: PANTHEON_ICON,
+    })
+  } catch (err) { console.error('[slack] postThreadBlocks failed:', err) }
 }
 
 // Posts a step update as a thread reply on the deployment started message.
@@ -135,9 +148,17 @@ export function verifySignature(rawBody: string, timestamp: string, signature: s
 
 // ── Block Kit builders (compatible with both Slack and Pumble) ────────────────
 
+// When siteId is provided and differs from the display name, renders both:
+//   "Site Name (`site-id`)"
+// Otherwise just wraps the name in backticks.
+function formatSite(name: string, siteId?: string): string {
+  return siteId && siteId !== name ? `${name} (\`${siteId}\`)` : `\`${name}\``
+}
+
 export function buildLongRunningBlocks(
   source: string, destination: string, site: string,
   elapsedMin: number, done: number, total: number, currentStage: string | null,
+  siteId?: string,
 ): (Block | KnownBlock)[] {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
   const filled = Math.round(pct / 10)
@@ -147,40 +168,40 @@ export function buildLongRunningBlocks(
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `⏱ *Deployment running longer than usual*\n\`${source} → ${destination}\` on \`${site}\`\n\`[${bar}] ${pct}%\` · ${done}/${total} stages · ${elapsedMin} min elapsed\n${stage}`,
+      text: `⏱ *Deployment running longer than usual*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n\`[${bar}] ${pct}%\` · ${done}/${total} stages · ${elapsedMin} min elapsed\n${stage}`,
     },
   }]
 }
 
-export function buildUpcomingBlocks(source: string, destination: string, site: string, scheduledFor: string): (Block | KnownBlock)[] {
+export function buildUpcomingBlocks(source: string, destination: string, site: string, scheduledFor: string, siteId?: string): (Block | KnownBlock)[] {
   const dt = new Date(scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' })
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `⚡ *Deployment starting in ~10 minutes*\n\`${source} → ${destination}\` on \`${site}\`\n${dt} (Manila)`,
+      text: `⚡ *Deployment starting in ~10 minutes*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n${dt} (Manila)`,
     },
   }]
 }
 
-export function buildScheduledBlocks(source: string, destination: string, site: string, scheduledFor: string, notes?: string): (Block | KnownBlock)[] {
+export function buildScheduledBlocks(source: string, destination: string, site: string, scheduledFor: string, notes?: string, siteId?: string): (Block | KnownBlock)[] {
   const dt = new Date(scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
   const notesLine = notes ? `\n_${notes}_` : ''
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `📅 *Deployment scheduled*\n\`${source} → ${destination}\` on \`${site}\`\n${dt}${notesLine}`,
+      text: `📅 *Deployment scheduled*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n${dt}${notesLine}`,
     },
   }]
 }
 
-export function buildStartedBlocks(source: string, destination: string, site: string): (Block | KnownBlock)[] {
+export function buildStartedBlocks(source: string, destination: string, site: string, siteId?: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `🚀 *Deployment started*\n\`${source} → ${destination}\` on \`${site}\``,
+      text: `🚀 *Deployment started*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}`,
     },
   }]
 }
@@ -218,32 +239,32 @@ export function buildApprovalBlocks(
   ]
 }
 
-export function buildCompleteBlocks(source: string, destination: string, site: string, stages: string[]): (Block | KnownBlock)[] {
+export function buildCompleteBlocks(source: string, destination: string, site: string, stages: string[], siteId?: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `✅ *Deployment complete*\n\`${source} → ${destination}\` on \`${site}\`\nStages: ${stages.join(' → ')}`,
+      text: `✅ *Deployment complete*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\nStages: ${stages.join(' → ')}`,
     },
   }]
 }
 
-export function buildFailedBlocks(source: string, destination: string, site: string, reason: string): (Block | KnownBlock)[] {
+export function buildFailedBlocks(source: string, destination: string, site: string, reason: string, siteId?: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `❌ *Deployment failed*\n\`${source} → ${destination}\` on \`${site}\`\n${reason}`,
+      text: `❌ *Deployment failed*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n${reason}`,
     },
   }]
 }
 
-export function buildPausedBlocks(source: string, destination: string, site: string, pausedAfter: string): (Block | KnownBlock)[] {
+export function buildPausedBlocks(source: string, destination: string, site: string, pausedAfter: string, siteId?: string): (Block | KnownBlock)[] {
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `⏸ *Deployment paused*\n\`${source} → ${destination}\` on \`${site}\`\nPaused after \`${pausedAfter}\` — re-run from the console to continue.`,
+      text: `⏸ *Deployment paused*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\nPaused after \`${pausedAfter}\` — re-run from the console to continue.`,
     },
   }]
 }
