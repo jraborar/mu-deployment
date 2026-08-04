@@ -1,0 +1,49 @@
+name: Auto-create linked issue on PR open
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  link-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr     = context.payload.pull_request
+            const body   = pr.body || ''
+
+            // Skip if the PR already has a closing keyword
+            if (/\b(closes|fixes|resolves)\s+#\d+/i.test(body)) {
+              console.log('PR already has a closing keyword — skipping auto-create.')
+              return
+            }
+
+            // Create the issue using the PR title and body as a starting point
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: pr.title,
+              body: `Tracks changes introduced in PR #${pr.number}.\n\n${body}`.trim(),
+            })
+
+            console.log(`Created issue #${issue.number}`)
+
+            // Append Closes keyword to the PR description
+            const updated = body
+              ? `${body}\n\nCloses #${issue.number}`
+              : `Closes #${issue.number}`
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              body: updated,
+            })
+
+            console.log(`PR #${pr.number} updated with Closes #${issue.number}`)
