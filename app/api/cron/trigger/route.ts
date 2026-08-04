@@ -47,7 +47,7 @@ async function serverInit() {
     console.log(`[startup] Notifying Slack of ${pending.length} pending schedule(s)`)
     await Promise.all(pending.map(s =>
       broadcastMessage(
-        buildScheduledBlocks(s.source, s.destination, s.site_name ?? s.site, s.scheduled_for, s.notes),
+        buildScheduledBlocks(s.source, s.destination, s.site_name ?? s.site, s.scheduled_for, s.notes, s.site),
         `Deployment scheduled: ${s.source} → ${s.destination} on ${s.site_name ?? s.site}`,
       )
     ))

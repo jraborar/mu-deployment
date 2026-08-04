@@ -7,6 +7,7 @@ import {
   broadcastMessage,
   startDeploymentThread,
   postThreadStep,
+  postThreadBlocks,
   buildApprovalBlocks,
   buildCompleteBlocks,
   buildFailedBlocks,
@@ -70,10 +71,13 @@ export async function executeJob(job: Job): Promise<void> {
   const sendProgressAlert = () => {
     if (!['running', 'awaiting-approval'].includes(job.status)) return
     const elapsedMin = Math.floor((Date.now() - startedAt) / 60000)
-    void broadcastMessage(
-      buildLongRunningBlocks(job.source, job.destination, siteLabel, elapsedMin, job.completedStages.length, job.stages.length, job.currentStage),
-      `⏱ Deployment still running after ${elapsedMin} min on ${siteLabel}`,
-    )
+    const blocks = buildLongRunningBlocks(job.source, job.destination, siteLabel, elapsedMin, job.completedStages.length, job.stages.length, job.currentStage, job.site)
+    const text   = `⏱ Deployment still running after ${elapsedMin} min on ${siteLabel}`
+    if (slackThreadTs) {
+      void postThreadBlocks(slackThreadTs, blocks, text)
+    } else {
+      void broadcastMessage(blocks, text)
+    }
   }
 
   longRunningTimer = setTimeout(() => {
@@ -114,7 +118,7 @@ export async function executeJob(job: Job): Promise<void> {
       job.site_name = siteLabel
       void updateDeploymentSiteName(job.id, siteLabel)
     }
-    slackThreadTs = await startDeploymentThread(job.source, job.destination, siteLabel)
+    slackThreadTs = await startDeploymentThread(job.source, job.destination, siteLabel, job.site)
 
     // 3. Check uncommitted changes via JSON (structured, not fragile string matching)
     log('status', 'Checking for uncommitted changes...')
@@ -322,7 +326,7 @@ export async function executeJob(job: Job): Promise<void> {
             emit({ type: 'complete', status: 'paused' })
             job.emitter.emit('done')
             void broadcastMessage(
-              buildPausedBlocks(job.source, job.destination, siteLabel, stage),
+              buildPausedBlocks(job.source, job.destination, siteLabel, stage, job.site),
               `Deployment paused after ${stage} on ${siteLabel}`,
             )
             await finalizeDeploymentRecord(job.id, {
@@ -344,7 +348,7 @@ export async function executeJob(job: Job): Promise<void> {
     job.emitter.emit('done')
     postStep(`✅ *All done* — ${job.completedStages.join(' → ')} completed in ${elapsedMin} min`)
     void broadcastMessage(
-      buildCompleteBlocks(job.source, job.destination, siteLabel, job.completedStages),
+      buildCompleteBlocks(job.source, job.destination, siteLabel, job.completedStages, job.site),
       `Deployment complete: ${job.source} → ${job.destination} on ${siteLabel}`,
     )
 
@@ -367,7 +371,7 @@ export async function executeJob(job: Job): Promise<void> {
     if (!isCancelled) {
       postStep(`❌ *Failed:* ${err instanceof Error ? err.message : String(err)}`)
       void broadcastMessage(
-        buildFailedBlocks(job.source, job.destination, siteLabel, err instanceof Error ? err.message : String(err)),
+        buildFailedBlocks(job.source, job.destination, siteLabel, err instanceof Error ? err.message : String(err), job.site),
         `Deployment failed: ${job.source} → ${job.destination} on ${siteLabel}`,
       )
     }

@@ -36,7 +36,7 @@ export async function runDueSchedules(): Promise<{ triggered: number; skipped: n
   const upcoming = await claimPreNotifications()
   for (const s of upcoming) {
     void broadcastMessage(
-      buildUpcomingBlocks(s.source, s.destination, s.site_name ?? s.site, s.scheduled_for),
+      buildUpcomingBlocks(s.source, s.destination, s.site_name ?? s.site, s.scheduled_for, s.site),
       `⚡ Deployment starting in ~10 minutes: ${s.source} → ${s.destination} on ${s.site_name ?? s.site}`,
     )
   }
