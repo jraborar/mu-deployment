@@ -32,12 +32,22 @@ export function run(cmd: string): Promise<RunResult> {
 
 // Streams stdout/stderr line-by-line into onLine as the command runs.
 // Use for long Terminus operations so output appears in real time.
+// Hard-kills the subprocess after STREAM_TIMEOUT_MS to prevent jobs
+// from hanging indefinitely when Terminus stalls mid-operation.
+const STREAM_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
+
 export function runStream(
   cmd: string,
   onLine: (line: string) => void,
 ): Promise<{ code: number }> {
   return new Promise((resolve) => {
     const child = spawn('sh', ['-c', cmd], { env: ENV })
+
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      setTimeout(() => child.kill('SIGKILL'), 5_000)
+      resolve({ code: 124 }) // 124 = timeout (same as GNU timeout)
+    }, STREAM_TIMEOUT_MS)
 
     const handle = (data: Buffer) => {
       const lines = stripAnsi(data.toString()).split('\n')
@@ -49,7 +59,10 @@ export function runStream(
 
     child.stdout.on('data', handle)
     child.stderr.on('data', handle)
-    child.on('close', (code) => resolve({ code: code ?? 0 }))
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ code: code ?? 0 })
+    })
   })
 }
 

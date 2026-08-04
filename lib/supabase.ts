@@ -106,6 +106,15 @@ export async function updateSchedule(id: string, updates: Partial<Pick<ScheduleR
   if (error) console.error('[supabase] updateSchedule:', error.message)
 }
 
+// Writes the human-readable site label to Supabase as soon as it is
+// resolved mid-job, so interrupted jobs show a name instead of a UUID.
+export async function updateDeploymentSiteName(id: string, site_name: string): Promise<void> {
+  const db = getClient()
+  if (!db) return
+  const { error } = await db.from('deployment_history').update({ site_name }).eq('id', id)
+  if (error) console.error('[supabase] updateDeploymentSiteName:', error.message)
+}
+
 // Marks orphaned 'running' records from a crashed/restarted server as failed.
 // Skips records started within the last GRACE_HOURS hours — those may still be
 // running on Pantheon's side even if this server lost track of them.

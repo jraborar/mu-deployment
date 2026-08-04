@@ -1,7 +1,7 @@
 import { type Job, type LogEntry } from '@/lib/jobStore'
 import { run, runStream, getLatestCommitHash } from '@/lib/terminus'
 import { findByPrefix } from '@/lib/pipeline'
-import { createDeploymentRecord, finalizeDeploymentRecord } from '@/lib/supabase'
+import { createDeploymentRecord, finalizeDeploymentRecord, updateDeploymentSiteName } from '@/lib/supabase'
 import { getPacificYYMMDD } from '@/lib/timezone'
 import {
   broadcastMessage,
@@ -110,6 +110,10 @@ export async function executeJob(job: Job): Promise<void> {
       try { const d = JSON.parse(cleanedInfo.slice(jsonStart)); siteLabel = d?.label ?? d?.name ?? job.site } catch {}
     }
     log('info', `Site ${siteLabel} verified`)
+    if (siteLabel !== job.site) {
+      job.site_name = siteLabel
+      void updateDeploymentSiteName(job.id, siteLabel)
+    }
     slackThreadTs = await startDeploymentThread(job.source, job.destination, siteLabel)
 
     // 3. Check uncommitted changes via JSON (structured, not fragile string matching)
