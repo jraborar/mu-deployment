@@ -68,6 +68,6 @@ export function runStream(
 
 export async function getLatestCommitHash(site: string, env: string): Promise<string | null> {
   const result = await run(`terminus env:code-log ${site}.${env} --field=hash 2>/dev/null`)
-  const hash = result.stdout.trim().split('\n')[0]?.trim()
+  const hash = result.stdout.split('\n').map(l => l.trim()).find(l => /^[0-9a-f]{40}$/i.test(l))
   return hash || null
 }
