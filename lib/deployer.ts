@@ -156,7 +156,7 @@ export async function executeJob(job: Job): Promise<void> {
       if (!devHash) {
         log('warn', 'Could not retrieve dev commit hash — skipping alignment check')
       } else {
-        const sourceLogResult = await run(`terminus env:code-log ${job.site}.${job.source} --format=json 2>/dev/null`)
+        const sourceLogResult = await run(`terminus env:code-log ${job.site}.${job.source} --field=hash 2>/dev/null`)
         const devAhead = !sourceLogResult.stdout.includes(devHash)
 
         if (devAhead) {
@@ -199,14 +199,14 @@ export async function executeJob(job: Job): Promise<void> {
     // 4. Pending pipeline deploy check (informational only)
     if (job.stages.includes('test')) {
       const devHash = await getLatestCommitHash(job.site, 'dev')
-      const testLog = await run(`terminus env:code-log ${job.site}.test --format=json 2>/dev/null`)
+      const testLog = await run(`terminus env:code-log ${job.site}.test --field=hash 2>/dev/null`)
       if (devHash && !testLog.stdout.includes(devHash)) {
         log('warn', 'dev has commits not yet deployed to test')
       }
     }
     if (job.stages.includes('live')) {
       const testHash = await getLatestCommitHash(job.site, 'test')
-      const liveLog  = await run(`terminus env:code-log ${job.site}.live --format=json 2>/dev/null`)
+      const liveLog  = await run(`terminus env:code-log ${job.site}.live --field=hash 2>/dev/null`)
       if (testHash && !liveLog.stdout.includes(testHash)) {
         log('warn', 'test has commits not yet deployed to live')
       }
