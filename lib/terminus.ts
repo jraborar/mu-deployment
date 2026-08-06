@@ -1,4 +1,5 @@
 import { exec, spawn } from 'child_process'
+import { type Job } from '@/lib/jobStore'
 export { computeStages, findByPrefix } from '@/lib/pipeline'
 
 export interface RunResult {
@@ -8,6 +9,7 @@ export interface RunResult {
 }
 
 const ENV = { ...process.env, TERMINUS_HIDE_UPDATE_MESSAGE: '1' }
+const CANCEL_POLL_MS = 1_000
 
 function stripAnsi(s: string): string {
   return s.replace(/\x1B\[[0-9;]*[mGKHF]/g, '')
@@ -18,15 +20,25 @@ function isNoise(line: string): boolean {
     || /^\d+\/\d+\s*\[/.test(line)
 }
 
-export function run(cmd: string): Promise<RunResult> {
+export function run(cmd: string, job?: Job): Promise<RunResult> {
   return new Promise((resolve) => {
-    exec(cmd, { env: ENV }, (err, stdout, stderr) => {
+    const child = exec(cmd, { env: ENV }, (err, stdout, stderr) => {
+      if (killCheck) clearInterval(killCheck)
       resolve({
         stdout: stripAnsi(stdout ?? ''),
         stderr: stripAnsi(stderr ?? ''),
         code: err ? (err.code ?? 1) : 0,
       })
     })
+    let killCheck: ReturnType<typeof setInterval> | null = null
+    if (job) {
+      killCheck = setInterval(() => {
+        if (job.cancelRequested) {
+          child.kill('SIGTERM')
+          setTimeout(() => child.kill('SIGKILL'), 5_000)
+        }
+      }, CANCEL_POLL_MS)
+    }
   })
 }
 
@@ -39,6 +51,7 @@ const STREAM_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 export function runStream(
   cmd: string,
   onLine: (line: string) => void,
+  job?: Job,
 ): Promise<{ code: number }> {
   return new Promise((resolve) => {
     const child = spawn('sh', ['-c', cmd], { env: ENV })
@@ -48,6 +61,17 @@ export function runStream(
       setTimeout(() => child.kill('SIGKILL'), 5_000)
       resolve({ code: 124 }) // 124 = timeout (same as GNU timeout)
     }, STREAM_TIMEOUT_MS)
+
+    let killCheck: ReturnType<typeof setInterval> | null = null
+    if (job) {
+      killCheck = setInterval(() => {
+        if (job.cancelRequested) {
+          child.kill('SIGTERM')
+          setTimeout(() => child.kill('SIGKILL'), 5_000)
+          if (killCheck) clearInterval(killCheck)
+        }
+      }, CANCEL_POLL_MS)
+    }
 
     const handle = (data: Buffer) => {
       const lines = stripAnsi(data.toString()).split('\n')
@@ -61,6 +85,7 @@ export function runStream(
     child.stderr.on('data', handle)
     child.on('close', (code) => {
       clearTimeout(timer)
+      if (killCheck) clearInterval(killCheck)
       resolve({ code: code ?? 0 })
     })
   })

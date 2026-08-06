@@ -89,12 +89,13 @@ export async function executeJob(job: Job): Promise<void> {
     log('info', `Deployment started: ${job.source} → ${job.destination} on ${job.site}${job.autoApprove ? ' (scheduled)' : ''}`)
 
     // 1. Verify Terminus authentication
+    checkCancelled(job)
     log('status', 'Verifying Terminus authentication...')
     const token = process.env.TERMINUS_TOKEN
     if (token) {
-      await run(`terminus auth:login --machine-token="${token}" 2>&1`)
+      await run(`terminus auth:login --machine-token="${token}" 2>&1`, job)
     }
-    const whoami = await run(`terminus auth:whoami 2>&1`)
+    const whoami = await run(`terminus auth:whoami 2>&1`, job)
     const identity = whoami.stdout.split('\n').find(l => l.includes('@'))?.trim()
     if (whoami.code !== 0 || !identity) {
       throw new Error('Terminus is not authenticated. Check TERMINUS_TOKEN environment variable.')
@@ -103,8 +104,9 @@ export async function executeJob(job: Job): Promise<void> {
     postStep(`✓ Authenticated as ${identity}`)
 
     // 2. Validate site and resolve human-readable label for notifications
+    checkCancelled(job)
     log('status', `Validating site ${job.site}...`)
-    const siteInfo = await run(`terminus site:info ${job.site} 2>&1`)
+    const siteInfo = await run(`terminus site:info ${job.site} 2>&1`, job)
     if (siteInfo.stdout.includes('not found') || siteInfo.code !== 0) {
       throw new Error(`Site "${job.site}" not found or inaccessible`)
     }
@@ -121,10 +123,11 @@ export async function executeJob(job: Job): Promise<void> {
     slackThreadTs = await startDeploymentThread(job.source, job.destination, siteLabel, job.site)
 
     // 3. Check uncommitted changes via JSON (structured, not fragile string matching)
+    checkCancelled(job)
     log('status', 'Checking for uncommitted changes...')
     for (const env of ['dev', 'test', 'live']) {
       log('info', `  Checking ${env}...`)
-      const diff = await run(`terminus env:diffstat ${job.site}.${env} --format=json 2>&1`)
+      const diff = await run(`terminus env:diffstat ${job.site}.${env} --format=json 2>&1`, job)
       let hasChanges = false
       try {
         const cleaned = diff.stdout.split('\n')
@@ -142,53 +145,79 @@ export async function executeJob(job: Job): Promise<void> {
     log('info', 'No uncommitted changes detected')
     postStep('✓ No uncommitted changes in dev / test / live')
 
-    // 3. Validate source and check git alignment (custom multidevs only)
+    // 4. Validate source and check git alignment (custom multidevs only)
     const stdEnvs = ['dev', 'test', 'live']
     if (!stdEnvs.includes(job.source)) {
+      checkCancelled(job)
       log('status', `Validating multidev "${job.source}"...`)
-      const multidevList = await run(`terminus multidev:list ${job.site} --field=id 2>&1`)
+      const multidevList = await run(`terminus multidev:list ${job.site} --field=id 2>&1`, job)
       if (!multidevList.stdout.toLowerCase().includes(job.source.toLowerCase())) {
         throw new Error(`Multidev "${job.source}" does not exist on site ${job.site}`)
       }
 
+      checkCancelled(job)
       log('status', `Checking code alignment between dev and ${job.source}...`)
       const devHash = await getLatestCommitHash(job.site, 'dev')
       if (!devHash) {
         log('warn', 'Could not retrieve dev commit hash — skipping alignment check')
       } else {
-        const sourceLogResult = await run(`terminus env:code-log ${job.site}.${job.source} --field=hash 2>/dev/null`)
+        const sourceLogResult = await run(`terminus env:code-log ${job.site}.${job.source} --field=hash 2>/dev/null`, job)
         const devAhead = !sourceLogResult.stdout.includes(devHash)
 
         if (devAhead) {
-          log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
-          const alignPayload = {
-            approvalType: 'alignment' as const,
-            message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-          }
-          emit({ type: 'awaiting-approval', ...alignPayload })
-          job.status = 'awaiting-approval'
-          void postThreadBlocks(
-            slackThreadTs,
-            buildApprovalBlocks(
-              job.id,
-              `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-              'Merge',
-              'Cancel',
-            ),
-            `Master went ahead of ${job.source} on ${siteLabel}`,
-          )
-          const shouldMerge = await waitForApproval(job, alignPayload)
-          job.status = 'running'
-
-          if (shouldMerge) {
-            log('status', `Merging dev into ${job.source}...`)
-            postStep(`↙ Merging dev → \`${job.source}\`...`)
-            const r = await run(`terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`)
-            if (r.code !== 0) throw new Error(`Failed to merge dev into ${job.source}: ${r.stdout.trim() || r.stderr.trim()}`)
+          if (job.autoApprove) {
+            // Scheduled: auto-merge silently — no human available to respond to a prompt
+            log('warn', `Master is ahead of ${job.source} — auto-merging for scheduled deployment`)
+            postStep(`↙ Auto-merging dev → \`${job.source}\` (master is ahead)...`)
+            const mergeLines: string[] = []
+            const r = await runStream(
+              `terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`,
+              (line) => { log('info', line); mergeLines.push(line) },
+              job,
+            )
+            checkCancelled(job)
+            if (r.code !== 0) throw new Error(`Failed to merge dev into ${job.source}: ${mergeLines.slice(-3).join(' ')}`)
             log('success', `Merged dev into ${job.source}`)
             postStep(`✓ Merged dev into \`${job.source}\``)
           } else {
-            throw new CancelledError()
+            // Manual: Slack thread prompt — human decides merge or cancel
+            log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
+            const alignPayload = {
+              approvalType: 'alignment' as const,
+              message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+            }
+            emit({ type: 'awaiting-approval', ...alignPayload })
+            job.status = 'awaiting-approval'
+            void postThreadBlocks(
+              slackThreadTs,
+              buildApprovalBlocks(
+                job.id,
+                `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+                'Merge',
+                'Cancel',
+              ),
+              `Master went ahead of ${job.source} on ${siteLabel}`,
+            )
+            const shouldMerge = await waitForApproval(job, alignPayload)
+            job.status = 'running'
+            checkCancelled(job)
+
+            if (shouldMerge) {
+              log('status', `Merging dev into ${job.source}...`)
+              postStep(`↙ Merging dev → \`${job.source}\`...`)
+              const mergeLines: string[] = []
+              const r = await runStream(
+                `terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`,
+                (line) => { log('info', line); mergeLines.push(line) },
+                job,
+              )
+              checkCancelled(job)
+              if (r.code !== 0) throw new Error(`Failed to merge dev into ${job.source}: ${mergeLines.slice(-3).join(' ')}`)
+              log('success', `Merged dev into ${job.source}`)
+              postStep(`✓ Merged dev into \`${job.source}\``)
+            } else {
+              throw new CancelledError()
+            }
           }
         } else {
           log('info', `dev is aligned with ${job.source} — no merge needed`)
@@ -196,28 +225,29 @@ export async function executeJob(job: Job): Promise<void> {
       }
     }
 
-    // 4. Pending pipeline deploy check (informational only)
+    // 5. Pending pipeline deploy check (informational only)
+    checkCancelled(job)
     if (job.stages.includes('test')) {
       const devHash = await getLatestCommitHash(job.site, 'dev')
-      const testLog = await run(`terminus env:code-log ${job.site}.test --field=hash 2>/dev/null`)
+      const testLog = await run(`terminus env:code-log ${job.site}.test --field=hash 2>/dev/null`, job)
       if (devHash && !testLog.stdout.includes(devHash)) {
         log('warn', 'dev has commits not yet deployed to test')
       }
     }
     if (job.stages.includes('live')) {
       const testHash = await getLatestCommitHash(job.site, 'test')
-      const liveLog  = await run(`terminus env:code-log ${job.site}.live --field=hash 2>/dev/null`)
+      const liveLog  = await run(`terminus env:code-log ${job.site}.live --field=hash 2>/dev/null`, job)
       if (testHash && !liveLog.stdout.includes(testHash)) {
         log('warn', 'test has commits not yet deployed to live')
       }
     }
 
-    // 5. Stage loop
+    // 6. Stage loop
     const date = getPacificYYMMDD()
     const snapNames:    Record<string, string> = { dev: `snpd-${date}`, test: `snpt-${date}`, live: `snpl-${date}` }
     const snapPrefixes: Record<string, string> = { dev: 'snpd', test: 'snpt', live: 'snpl' }
 
-    const multidevListResult = await run(`terminus multidev:list ${job.site} --field=id 2>&1`)
+    const multidevListResult = await run(`terminus multidev:list ${job.site} --field=id 2>&1`, job)
     const multidevList = multidevListResult.stdout
 
     for (let i = 0; i < job.stages.length; i++) {
@@ -233,7 +263,7 @@ export async function executeJob(job: Job): Promise<void> {
       if (oldSnap) {
         log('delete', `Removing old snapshot ${oldSnap}...`)
         postStep(`🗑 Removing old snapshot \`${oldSnap}\`...`)
-        await run(`terminus multidev:delete --yes ${job.site}.${oldSnap} 2>&1`)
+        await run(`terminus multidev:delete --yes ${job.site}.${oldSnap} 2>&1`, job)
         log('deleted', `Removed ${oldSnap}`)
         postStep(`✓ Removed \`${oldSnap}\``)
       }
@@ -243,6 +273,7 @@ export async function executeJob(job: Job): Promise<void> {
       const snapResult = await runStream(
         `terminus multidev:create ${job.site}.${stage} ${snapNames[stage]} 2>&1`,
         (line) => log('info', line),
+        job,
       )
       if (snapResult.code !== 0) throw new Error(`Snapshot creation failed`)
       log('info', `Snapshot ${snapNames[stage]} created`)
@@ -256,6 +287,7 @@ export async function executeJob(job: Job): Promise<void> {
         const r = await runStream(
           `terminus multidev:merge-to-dev --updatedb ${job.site}.${job.source} 2>&1`,
           (line) => log('info', line),
+          job,
         )
         if (r.code !== 0) throw new Error(`Merge to dev failed`)
         postStep(`✓ Merged to dev`)
@@ -265,6 +297,7 @@ export async function executeJob(job: Job): Promise<void> {
         const r = await runStream(
           `terminus env:deploy --sync-content --updatedb --cc --note "Pantheon Managed Updates: Deployed from ${job.label}" ${job.site}.test 2>&1`,
           (line) => log('info', line),
+          job,
         )
         if (r.code !== 0) throw new Error(`Deploy to test failed`)
         postStep(`✓ Deployed to test`)
@@ -274,6 +307,7 @@ export async function executeJob(job: Job): Promise<void> {
         const r = await runStream(
           `terminus env:deploy --updatedb --cc --note "Pantheon Managed Updates: Deployed from ${job.label}" ${job.site}.live 2>&1`,
           (line) => log('info', line),
+          job,
         )
         if (r.code !== 0) throw new Error(`Deploy to live failed`)
         postStep(`✓ Deployed to live`)
