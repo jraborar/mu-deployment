@@ -152,76 +152,61 @@ export async function executeJob(job: Job): Promise<void> {
       }
 
       log('status', `Checking code alignment between dev and ${job.source}...`)
-      const gitUrlResult = await run(`terminus connection:info ${job.site}.dev --field=git_url 2>/dev/null`)
-      const gitUrl = gitUrlResult.stdout.trim()
+      const devHash = await getLatestCommitHash(job.site, 'dev')
+      if (!devHash) {
+        log('warn', 'Could not retrieve dev commit hash — skipping alignment check')
+      } else {
+        const sourceLogResult = await run(`terminus env:code-log ${job.site}.${job.source} --field=hash 2>/dev/null`)
+        const devAhead = !sourceLogResult.stdout.includes(devHash)
 
-      if (gitUrl) {
-        const safeSite = job.site.replace(/[^a-zA-Z0-9-]/g, '_')
-        const tmpDir = `/tmp/mu_deploy_${safeSite}_${job.id}`
-        await run(`rm -rf "${tmpDir}"`)
-        log('info', 'Cloning repository for alignment check (may take a moment)...')
-        await run(`git clone --bare --no-single-branch "${gitUrl}" "${tmpDir}" 2>/dev/null`)
+        if (devAhead) {
+          log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
+          const alignPayload = {
+            approvalType: 'alignment' as const,
+            message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+          }
+          emit({ type: 'awaiting-approval', ...alignPayload })
+          job.status = 'awaiting-approval'
+          void postThreadBlocks(
+            slackThreadTs,
+            buildApprovalBlocks(
+              job.id,
+              `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+              'Merge',
+              'Cancel',
+            ),
+            `Master went ahead of ${job.source} on ${siteLabel}`,
+          )
+          const shouldMerge = await waitForApproval(job, alignPayload)
+          job.status = 'running'
 
-        // Count commits in dev (master) that are NOT in source.
-        // If 0, dev is not ahead — source may be ahead of dev, which is expected before deployment.
-        const aheadResult = await run(`git -C "${tmpDir}" rev-list --count "${job.source}..master" 2>/dev/null`)
-        const devAheadCount = parseInt(aheadResult.stdout.trim(), 10) || 0
-
-        if (devAheadCount > 0) {
-          const diffStatResult = await run(`git -C "${tmpDir}" diff --shortstat "${job.source}" master 2>/dev/null`)
-          const diffStat = diffStatResult.stdout.trim()
-          await run(`rm -rf "${tmpDir}"`)
-          log('warn', `dev is ${devAheadCount} commit(s) ahead of ${job.source}: ${diffStat}`)
-
-          if (job.autoApprove) {
-            log('warn', `Scheduled run — skipping merge, proceeding`)
+          if (shouldMerge) {
+            log('status', `Merging dev into ${job.source}...`)
+            postStep(`↙ Merging dev → \`${job.source}\`...`)
+            const r = await run(`terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`)
+            if (r.code !== 0) throw new Error(`Failed to merge dev into ${job.source}: ${r.stdout.trim() || r.stderr.trim()}`)
+            log('success', `Merged dev into ${job.source}`)
+            postStep(`✓ Merged dev into \`${job.source}\``)
           } else {
-            const alignPayload = {
-              approvalType: 'alignment' as const,
-              message: `dev is ${devAheadCount} commit(s) ahead of ${job.source} (${diffStat}). Merge dev into ${job.source} first?`,
-              diffStat,
-            }
-            emit({ type: 'awaiting-approval', ...alignPayload })
-            job.status = 'awaiting-approval'
-            void broadcastMessage(
-              buildApprovalBlocks(
-                job.id,
-                `dev is ${devAheadCount} commit(s) ahead of \`${job.source}\` (${diffStat})`,
-                '↙ Merge dev first',
-                'Skip →',
-              ),
-              `Alignment check: dev is ahead of ${job.source} on ${siteLabel}`,
-            )
-            const shouldMerge = await waitForApproval(job, alignPayload)
-            job.status = 'running'
-            if (shouldMerge) {
-              log('status', `Merging dev into ${job.source}...`)
-              const r = await run(`terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`)
-              log(r.code === 0 ? 'success' : 'error', `merge-from-dev: ${r.stdout.trim() || r.stderr.trim()}`)
-            } else {
-              log('warn', `Skipping merge — proceeding with unaligned branches`)
-            }
+            throw new CancelledError()
           }
         } else {
-          await run(`rm -rf "${tmpDir}"`)
-          log('info', `dev is not ahead of ${job.source} — no merge needed`)
+          log('info', `dev is aligned with ${job.source} — no merge needed`)
         }
-      } else {
-        log('warn', 'Could not retrieve git URL — skipping alignment check')
       }
     }
 
     // 4. Pending pipeline deploy check (informational only)
     if (job.stages.includes('test')) {
       const devHash = await getLatestCommitHash(job.site, 'dev')
-      const testLog = await run(`terminus env:code-log ${job.site}.test --format=json 2>/dev/null`)
+      const testLog = await run(`terminus env:code-log ${job.site}.test --field=hash 2>/dev/null`)
       if (devHash && !testLog.stdout.includes(devHash)) {
         log('warn', 'dev has commits not yet deployed to test')
       }
     }
     if (job.stages.includes('live')) {
       const testHash = await getLatestCommitHash(job.site, 'test')
-      const liveLog  = await run(`terminus env:code-log ${job.site}.live --format=json 2>/dev/null`)
+      const liveLog  = await run(`terminus env:code-log ${job.site}.live --field=hash 2>/dev/null`)
       if (testHash && !liveLog.stdout.includes(testHash)) {
         log('warn', 'test has commits not yet deployed to live')
       }
@@ -262,6 +247,8 @@ export async function executeJob(job: Job): Promise<void> {
       if (snapResult.code !== 0) throw new Error(`Snapshot creation failed`)
       log('info', `Snapshot ${snapNames[stage]} created`)
       postStep(`✓ Snapshot \`${snapNames[stage]}\` created`)
+
+      checkCancelled(job)
 
       if (stage === 'dev') {
         log('status', `Merging ${job.source} into dev...`)

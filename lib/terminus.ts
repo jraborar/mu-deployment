@@ -67,13 +67,7 @@ export function runStream(
 }
 
 export async function getLatestCommitHash(site: string, env: string): Promise<string | null> {
-  const result = await run(`terminus env:code-log ${site}.${env} --format=json 2>/dev/null`)
-  try {
-    const data = JSON.parse(result.stdout)
-    const first = data[0]
-    for (const key of ['hash', 'Hash', 'commit', 'sha']) {
-      if (first?.[key]) return String(first[key])
-    }
-  } catch {}
-  return null
+  const result = await run(`terminus env:code-log ${site}.${env} --field=hash 2>/dev/null`)
+  const hash = result.stdout.trim().split('\n')[0]?.trim()
+  return hash || null
 }
