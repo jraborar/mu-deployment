@@ -31,6 +31,8 @@ export interface Job {
     message: string
     nextStage?: string
     diffStat?: string
+    approveLabel?: string
+    rejectLabel?: string
   } | null
 }
 

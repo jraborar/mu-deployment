@@ -117,22 +117,25 @@ function PipelineBar({
 }
 
 function ApprovalPrompt({
-  approvalType, message, diffStat, nextStage, onApprove, onReject,
+  approvalType, message, nextStage, approveLabel, rejectLabel, onApprove, onReject,
 }: {
   approvalType: ApprovalType | null
   message: string
-  diffStat?: string
   nextStage?: string | null
+  approveLabel?: string | null
+  rejectLabel?: string | null
   onApprove: () => void
   onReject: () => void
 }) {
   const isAlignment = approvalType === 'alignment'
+  const defaultApprove = isAlignment ? '↙ Merge' : `✓ Deploy to ${nextStage}`
+  const defaultReject  = isAlignment ? 'Cancel'  : '⏸ Pause here'
   return (
     <div className="animate-slide-up rounded-xl border border-pantheon-yellow/40 bg-pantheon-yellow/5 p-5">
       <div className="mb-1 flex items-center gap-2">
         <span className="text-pantheon-yellow">{isAlignment ? '⚠' : '◈'}</span>
         <span className="font-mono text-sm font-semibold text-pantheon-yellow">
-          {isAlignment ? 'Alignment Check' : `Ready to deploy to ${nextStage}`}
+          {isAlignment ? 'Action required' : `Ready to deploy to ${nextStage}`}
         </span>
       </div>
       <p className="mb-4 font-mono text-xs text-pantheon-text-muted">{message}</p>
@@ -141,13 +144,13 @@ function ApprovalPrompt({
           onClick={onApprove}
           className="rounded-lg bg-pantheon-yellow px-4 py-2 font-mono text-xs font-semibold text-black hover:bg-pantheon-yellow-dark transition-colors"
         >
-          {isAlignment ? '↙ Merge Dev First' : `✓ Deploy to ${nextStage}`}
+          {approveLabel ?? defaultApprove}
         </button>
         <button
           onClick={onReject}
           className="rounded-lg border border-pantheon-border px-4 py-2 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi hover:text-pantheon-text transition-colors"
         >
-          {isAlignment ? 'Skip →' : '⏸ Pause Here'}
+          {rejectLabel ?? defaultReject}
         </button>
       </div>
     </div>
@@ -497,10 +500,12 @@ export default function Page() {
   const [completedStages, setCompleted] = useState<string[]>([])
   const [currentStage, setCurrent]     = useState<string | null>(null)
   const [logs, setLogs]                = useState<LogEntry[]>([])
-  const [approvalType, setApprovalType] = useState<ApprovalType | null>(null)
-  const [approvalMsg, setApprovalMsg]  = useState('')
-  const [diffStat, setDiffStat]        = useState<string | undefined>()
-  const [nextStage, setNextStage]      = useState<string | null>(null)
+  const [approvalType, setApprovalType]   = useState<ApprovalType | null>(null)
+  const [approvalMsg, setApprovalMsg]    = useState('')
+  const [diffStat, setDiffStat]          = useState<string | undefined>()
+  const [nextStage, setNextStage]        = useState<string | null>(null)
+  const [approveLabel, setApproveLabel]  = useState<string | null>(null)
+  const [rejectLabel, setRejectLabel]    = useState<string | null>(null)
 
   // Schedule state
   const [schedSites, setSchedSites]    = useState([{ site: '', source: '' }])
@@ -752,6 +757,8 @@ export default function Page() {
         setApprovalMsg(data.message as string)
         setNextStage((data.nextStage as string) ?? null)
         setDiffStat(data.diffStat as string | undefined)
+        setApproveLabel((data.approveLabel as string) ?? null)
+        setRejectLabel((data.rejectLabel as string) ?? null)
         break
       case 'complete':
         setDeployStatus(
@@ -909,6 +916,8 @@ export default function Page() {
     setStages([])
     setNextStage(null)
     setApprovalType(null)
+    setApproveLabel(null)
+    setRejectLabel(null)
     setJobId(null)
     sessionStorage.removeItem('mu-deploy-job-id')
   }
@@ -1137,8 +1146,9 @@ export default function Page() {
             <ApprovalPrompt
               approvalType={approvalType}
               message={approvalMsg}
-              diffStat={diffStat}
               nextStage={nextStage}
+              approveLabel={approveLabel}
+              rejectLabel={rejectLabel}
               onApprove={() => sendApproval(true)}
               onReject={() => sendApproval(false)}
             />

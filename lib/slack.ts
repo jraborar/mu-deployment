@@ -268,3 +268,21 @@ export function buildPausedBlocks(source: string, destination: string, site: str
     },
   }]
 }
+
+export function buildCancelledBlocks(
+  source: string, destination: string, site: string,
+  reason: string, completedStages: string[], scheduled: boolean,
+  siteId?: string,
+): (Block | KnownBlock)[] {
+  const stageCtx = completedStages.length > 0
+    ? `Completed: ${completedStages.join(' → ')}`
+    : 'No stages completed'
+  const typeLabel = scheduled ? 'Scheduled deployment' : 'Deployment'
+  return [{
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `🚫 *${typeLabel} cancelled*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n${reason}\n_${stageCtx}_`,
+    },
+  }]
+}

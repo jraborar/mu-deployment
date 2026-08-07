@@ -12,6 +12,7 @@ import {
   buildCompleteBlocks,
   buildFailedBlocks,
   buildPausedBlocks,
+  buildCancelledBlocks,
   buildLongRunningBlocks,
 } from '@/lib/slack'
 
@@ -19,9 +20,13 @@ class CancelledError extends Error {
   constructor() { super('Deployment cancelled by user') }
 }
 
+class PauseError extends Error {
+  constructor() { super('Deployment paused by user') }
+}
+
 export function waitForApproval(
   job: Job,
-  payload: { approvalType: string; message: string; nextStage?: string; diffStat?: string },
+  payload: { approvalType: string; message: string; nextStage?: string; diffStat?: string; approveLabel?: string; rejectLabel?: string },
 ): Promise<boolean> {
   return new Promise((resolve) => {
     job.pendingApproval = { resolve, ...payload }
@@ -125,7 +130,48 @@ export async function executeJob(job: Job): Promise<void> {
     }
     slackThreadTs = await startDeploymentThread(job.source, job.destination, siteLabel, job.site)
 
-    // 3. Check dev connection mode — must be git, not SFTP
+    // Helper: prompt via thread + UI, wait for decision, honour cancel
+    const prompt = async (
+      approvalType: 'alignment' | 'stage',
+      message: string,
+      approveLabel: string,
+      rejectLabel: string,
+      slackMessage: string,
+    ): Promise<boolean> => {
+      const payload = { approvalType, message, approveLabel, rejectLabel }
+      emit({ type: 'awaiting-approval', ...payload })
+      job.status = 'awaiting-approval'
+      void postThreadBlocks(
+        slackThreadTs,
+        buildApprovalBlocks(job.id, message, approveLabel, rejectLabel),
+        slackMessage,
+      )
+      const approved = await waitForApproval(job, payload)
+      job.status = 'running'
+      checkCancelled(job)
+      return approved
+    }
+
+    // Helper: pause the job cleanly (used when user picks Pause on any pre-check)
+    const pauseHere = async (reason: string) => {
+      job.status = 'paused'
+      log('warn', `Deployment paused — ${reason}`)
+      emit({ type: 'complete', status: 'paused' })
+      job.emitter.emit('done')
+      void postThreadBlocks(
+        slackThreadTs,
+        buildPausedBlocks(job.source, job.destination, siteLabel, 'pre-checks', job.site),
+        `Deployment paused on ${siteLabel} — ${reason}`,
+      )
+      await finalizeDeploymentRecord(job.id, {
+        stages_completed: job.completedStages, status: 'paused',
+        completed_at: new Date().toISOString(), logs: job.logs,
+        site_name: siteLabel !== job.site ? siteLabel : undefined,
+      })
+      throw new PauseError()
+    }
+
+    // 3. Check dev connection mode — if SFTP, offer to switch to git or pause
     checkCancelled(job)
     log('status', 'Checking dev connection mode...')
     const connInfo = await run(`terminus connection:info ${job.site}.dev --format=json 2>/dev/null`, job)
@@ -134,24 +180,38 @@ export async function executeJob(job: Job): Promise<void> {
       const start = cleaned.search(/[{[]/)
       if (start !== -1) {
         const connData = JSON.parse(cleaned.slice(start))
-        const mode = (connData?.sftp_url || connData?.sftp_command) ? 'sftp' : null
         const explicit = connData?.connection_mode ?? connData?.connection_type ?? null
-        const isSftp = explicit ? /sftp/i.test(String(explicit)) : mode === 'sftp'
+        const isSftp = explicit
+          ? /sftp/i.test(String(explicit))
+          : Boolean(connData?.sftp_url || connData?.sftp_command)
         if (isSftp) {
-          const msg = `Dev is in SFTP mode — switch to git mode before deploying`
-          log('error', msg)
-          void postThreadBlocks(slackThreadTs, buildFailedBlocks(job.source, job.destination, siteLabel, msg, job.site), msg)
-          throw new Error(msg)
+          log('warn', 'Dev is in SFTP mode — prompting')
+          const shouldSwitch = await prompt(
+            'alignment',
+            `Dev is in SFTP mode on \`${siteLabel}\`. Switch to git mode (uncommitted SFTP changes will be lost) or pause to commit first?`,
+            'Switch to git',
+            'Pause',
+            `Dev in SFTP mode on ${siteLabel}`,
+          )
+          if (shouldSwitch) {
+            log('status', 'Switching dev to git mode...')
+            const r = await run(`terminus connection:set ${job.site}.dev git 2>&1`, job)
+            if (r.code !== 0) throw new Error(`Failed to switch dev to git mode: ${r.stdout.trim()}`)
+            log('success', 'Dev switched to git mode')
+            postStep('✓ Dev switched to git mode')
+          } else {
+            await pauseHere('dev is in SFTP mode — switch to git and commit before resuming')
+          }
         }
       }
     } catch (e) {
-      if (e instanceof Error && e.message.includes('SFTP mode')) throw e
+      if (e instanceof PauseError || (e instanceof Error && e.message.includes('git mode'))) throw e
       log('warn', 'Could not determine dev connection mode — proceeding')
     }
     log('info', 'Dev connection mode: git ✓')
     postStep('✓ Dev is in git mode')
 
-    // 4. Check uncommitted changes via JSON (structured, not fragile string matching)
+    // 4. Check uncommitted changes — offer to pause or stop per environment
     checkCancelled(job)
     log('status', 'Checking for uncommitted changes...')
     for (const env of ['dev', 'test', 'live']) {
@@ -168,16 +228,25 @@ export async function executeJob(job: Job): Promise<void> {
         hasChanges = diff.stdout.includes('files changed') || diff.stdout.includes('ahead')
       }
       if (hasChanges) {
-        const msg = `Uncommitted changes detected in ${env} — commit and deploy before proceeding`
-        log('error', msg)
-        void postThreadBlocks(slackThreadTs, buildFailedBlocks(job.source, job.destination, siteLabel, msg, job.site), msg)
-        throw new Error(msg)
+        log('warn', `Uncommitted changes detected in ${env} — prompting`)
+        const shouldPause = await prompt(
+          'alignment',
+          `\`${env}\` has uncommitted changes on \`${siteLabel}\`. Pause to commit and resolve, or stop the deployment?`,
+          'Pause',
+          'Stop',
+          `Uncommitted changes in ${env} on ${siteLabel}`,
+        )
+        if (shouldPause) {
+          await pauseHere(`${env} has uncommitted changes — commit and resume when ready`)
+        } else {
+          throw new CancelledError()
+        }
       }
     }
     log('info', 'No uncommitted changes detected')
     postStep('✓ No uncommitted changes in dev / test / live')
 
-    // 4. Validate source and check git alignment (custom multidevs only)
+    // 5. Validate source and check git alignment (custom multidevs only)
     const stdEnvs = ['dev', 'test', 'live']
     if (!stdEnvs.includes(job.source)) {
       checkCancelled(job)
@@ -197,28 +266,14 @@ export async function executeJob(job: Job): Promise<void> {
         const devAhead = !sourceLogResult.stdout.includes(devHash)
 
         if (devAhead) {
-          // Always prompt via Slack thread — both manual and scheduled require human confirmation
           log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
-          const alignPayload = {
-            approvalType: 'alignment' as const,
-            message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-          }
-          emit({ type: 'awaiting-approval', ...alignPayload })
-          job.status = 'awaiting-approval'
-          void postThreadBlocks(
-            slackThreadTs,
-            buildApprovalBlocks(
-              job.id,
-              `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-              'Merge',
-              'Cancel',
-            ),
+          const shouldMerge = await prompt(
+            'alignment',
+            `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+            'Merge',
+            'Cancel',
             `Master went ahead of ${job.source} on ${siteLabel}`,
           )
-          const shouldMerge = await waitForApproval(job, alignPayload)
-          job.status = 'running'
-          checkCancelled(job)
-
           if (shouldMerge) {
             log('status', `Merging dev into ${job.source}...`)
             postStep(`↙ Merging dev → \`${job.source}\`...`)
@@ -241,41 +296,64 @@ export async function executeJob(job: Job): Promise<void> {
       }
     }
 
-    // 5. Pending pipeline deploy check — warn for dev→test gap; prompt to stop if test→live gap
+    // 6. Pending pipeline checks — offer to deploy gaps or pause
     checkCancelled(job)
     if (job.stages.includes('test')) {
       const devHash = await getLatestCommitHash(job.site, 'dev')
       const testLog = await run(`terminus env:code-log ${job.site}.test --field=hash 2>/dev/null`, job)
       if (devHash && !testLog.stdout.includes(devHash)) {
-        log('warn', 'dev has commits not yet deployed to test')
+        log('warn', 'dev has commits not yet deployed to test — prompting')
+        const shouldDeploy = await prompt(
+          'alignment',
+          `Dev has code not yet deployed to test on \`${siteLabel}\`. Deploy dev→test now before proceeding, or pause?`,
+          'Deploy dev→test',
+          'Pause',
+          `Dev has undeployed code on ${siteLabel}`,
+        )
+        if (shouldDeploy) {
+          log('status', 'Deploying dev→test...')
+          postStep('◈ Deploying dev→test...')
+          const r = await runStream(
+            `terminus env:deploy --sync-content --updatedb --cc --note "Pre-deployment sync" ${job.site}.test 2>&1`,
+            (line) => log('info', line),
+            job,
+          )
+          checkCancelled(job)
+          if (r.code !== 0) throw new Error('Deploy dev→test failed')
+          log('success', 'Dev deployed to test')
+          postStep('✓ Dev deployed to test')
+        } else {
+          await pauseHere('dev has undeployed code — deploy to test and resume when ready')
+        }
       }
     }
     if (job.stages.includes('live')) {
       const testHash = await getLatestCommitHash(job.site, 'test')
       const liveLog  = await run(`terminus env:code-log ${job.site}.live --field=hash 2>/dev/null`, job)
       if (testHash && !liveLog.stdout.includes(testHash)) {
-        log('warn', 'test has code not yet deployed to live — prompting before proceeding')
-        const pipelinePayload = {
-          approvalType: 'alignment' as const,
-          message: `Test has code not yet deployed to live on \`${siteLabel}\`. This may be from a prior paused deployment. Proceed or stop?`,
-        }
-        emit({ type: 'awaiting-approval', ...pipelinePayload })
-        job.status = 'awaiting-approval'
-        void postThreadBlocks(
-          slackThreadTs,
-          buildApprovalBlocks(
-            job.id,
-            `⚠ Test has undeployed code on \`${siteLabel}\`. Could be a prior paused deployment. Proceed anyway or stop?`,
-            'Proceed',
-            'Stop',
-          ),
-          `Test has undeployed code on ${siteLabel} — confirmation needed`,
+        log('warn', 'test has code not yet deployed to live — prompting')
+        const shouldDeploy = await prompt(
+          'alignment',
+          `Test has code not yet deployed to live on \`${siteLabel}\`. Deploy test→live now before proceeding, or pause?`,
+          'Deploy test→live',
+          'Pause',
+          `Test has undeployed code on ${siteLabel}`,
         )
-        const proceed = await waitForApproval(job, pipelinePayload)
-        job.status = 'running'
-        checkCancelled(job)
-        if (!proceed) throw new CancelledError()
-        log('info', 'Proceeding despite test→live gap — approved')
+        if (shouldDeploy) {
+          log('status', 'Deploying test→live...')
+          postStep('◈ Deploying test→live...')
+          const r = await runStream(
+            `terminus env:deploy --updatedb --cc --note "Pre-deployment sync" ${job.site}.live 2>&1`,
+            (line) => log('info', line),
+            job,
+          )
+          checkCancelled(job)
+          if (r.code !== 0) throw new Error('Deploy test→live failed')
+          log('success', 'Test deployed to live')
+          postStep('✓ Test deployed to live')
+        } else {
+          await pauseHere('test has undeployed code — deploy to live and resume when ready')
+        }
       }
     }
 
@@ -385,7 +463,8 @@ export async function executeJob(job: Job): Promise<void> {
             log('warn', `Paused after ${stage}. Re-run with source=${stage} and destination=${job.destination} to continue.`)
             emit({ type: 'complete', status: 'paused' })
             job.emitter.emit('done')
-            void broadcastMessage(
+            void postThreadBlocks(
+              slackThreadTs,
               buildPausedBlocks(job.source, job.destination, siteLabel, stage, job.site),
               `Deployment paused after ${stage} on ${siteLabel}`,
             )
@@ -418,6 +497,11 @@ export async function executeJob(job: Job): Promise<void> {
     })
   } catch (err) {
     const isCancelled = err instanceof CancelledError
+    const isPaused    = err instanceof PauseError
+    if (isPaused) {
+      // pauseHere() already finalized the record and emitted done — nothing more to do
+      return
+    }
     const status = isCancelled ? 'cancelled' : 'failed'
     const message = isCancelled
       ? `Deployment cancelled after ${job.completedStages.length > 0 ? job.completedStages.join(', ') : 'start'}`
@@ -428,9 +512,20 @@ export async function executeJob(job: Job): Promise<void> {
     job.emitter.emit('event', entry)
     emit({ type: 'complete', status })
     job.emitter.emit('done')
-    if (!isCancelled) {
+
+    if (isCancelled) {
+      const reason = job.autoApprove
+        ? 'Cancelled by operator — reschedule if needed'
+        : 'Cancelled by user'
+      void postThreadBlocks(
+        slackThreadTs,
+        buildCancelledBlocks(job.source, job.destination, siteLabel, reason, job.completedStages, job.autoApprove, job.site),
+        `Deployment cancelled on ${siteLabel}`,
+      )
+    } else {
       postStep(`❌ *Failed:* ${err instanceof Error ? err.message : String(err)}`)
-      void broadcastMessage(
+      void postThreadBlocks(
+        slackThreadTs,
         buildFailedBlocks(job.source, job.destination, siteLabel, err instanceof Error ? err.message : String(err), job.site),
         `Deployment failed: ${job.source} → ${job.destination} on ${siteLabel}`,
       )
