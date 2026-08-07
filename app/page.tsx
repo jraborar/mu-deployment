@@ -311,7 +311,7 @@ function ScheduleTable({
   )
 }
 
-function HistoryCard({ item }: { item: HistoryItem }) {
+function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: HistoryItem) => void }) {
   const statusColors: Record<string, string> = {
     completed: 'text-pantheon-success',
     failed:    'text-pantheon-error',
@@ -320,7 +320,7 @@ function HistoryCard({ item }: { item: HistoryItem }) {
     running:   'text-pantheon-info animate-pulse',
   }
   const siteColor = statusColors[item.status] ?? 'text-pantheon-text-muted'
-  const endLabel  = item.status === 'failed' ? 'Exited:' : 'Completed:'
+  const endLabel  = item.status === 'failed' ? 'Exited:' : item.status === 'paused' ? 'Paused:' : 'Completed:'
   const fmt = (ts: string) =>
     new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 
@@ -337,9 +337,19 @@ function HistoryCard({ item }: { item: HistoryItem }) {
             <span className={`font-mono text-sm font-semibold ${siteColor}`}>{item.site}</span>
           )}
         </div>
-        <span className={`font-mono text-xs font-semibold shrink-0 ${siteColor}`}>
-          {item.status}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {item.status === 'paused' && onResume && (
+            <button
+              onClick={() => onResume(item)}
+              className="rounded border border-pantheon-warning/40 px-2.5 py-0.5 font-mono text-xs text-pantheon-warning hover:bg-pantheon-warning/10 transition-colors"
+            >
+              ▶ Resume
+            </button>
+          )}
+          <span className={`font-mono text-xs font-semibold ${siteColor}`}>
+            {item.status}
+          </span>
+        </div>
       </div>
       <div className="font-mono text-xs">
         <span className="text-pantheon-yellow">{item.source}</span>
@@ -623,10 +633,19 @@ export default function Page() {
     if (el) el.scrollTop = el.scrollHeight
   }, [logs])
 
-  // Reconnect from sessionStorage + kick the scheduler singleton on mount
+  // Reconnect from sessionStorage, or fall back to any active in-memory job + kick the scheduler
   useEffect(() => {
     const saved = sessionStorage.getItem('mu-deploy-job-id')
-    if (saved) setJobId(saved)
+    if (saved) {
+      setJobId(saved)
+    } else {
+      fetch('/api/jobs')
+        .then(r => r.json())
+        .then((jobs: RunningJobItem[]) => {
+          if (jobs.length > 0) setJobId(jobs[0].id)
+        })
+        .catch(() => {})
+    }
     fetch('/api/cron/trigger').catch(() => {})
   }, [])
 
@@ -917,6 +936,14 @@ export default function Page() {
   const runScheduleNow = (item: ScheduleItem) => {
     setSite(item.site)
     setSource(item.source)
+    setDestination(item.destination as 'dev' | 'test' | 'live')
+    setTab('deploy')
+  }
+
+  const resumePaused = (item: HistoryItem) => {
+    const resumeSource = item.stages_completed[item.stages_completed.length - 1] ?? item.source
+    setSite(item.site)
+    setSource(resumeSource)
     setDestination(item.destination as 'dev' | 'test' | 'live')
     setTab('deploy')
   }
@@ -1399,7 +1426,7 @@ export default function Page() {
                   {!process.env.NEXT_PUBLIC_SUPABASE_URL && ' — configure Supabase to enable history'}
                 </p>
               )}
-              {pastHistory.map(item => <HistoryCard key={item.id} item={item} />)}
+              {pastHistory.map(item => <HistoryCard key={item.id} item={item} onResume={resumePaused} />)}
             </div>
           </div>
         )

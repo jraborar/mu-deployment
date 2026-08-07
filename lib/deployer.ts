@@ -68,10 +68,13 @@ export async function executeJob(job: Job): Promise<void> {
     if (longRunningInterval) clearInterval(longRunningInterval)
   }
 
+  let stageStartedAt: number | null = null
+
   const sendProgressAlert = () => {
     if (!['running', 'awaiting-approval'].includes(job.status)) return
-    const elapsedMin = Math.floor((Date.now() - startedAt) / 60000)
-    const blocks = buildLongRunningBlocks(job.source, job.destination, siteLabel, elapsedMin, job.completedStages.length, job.stages.length, job.currentStage, job.site)
+    const elapsedMin      = Math.floor((Date.now() - startedAt) / 60000)
+    const stageElapsedMin = stageStartedAt ? Math.floor((Date.now() - stageStartedAt) / 60000) : null
+    const blocks = buildLongRunningBlocks(job.source, job.destination, siteLabel, elapsedMin, job.completedStages.length, job.stages.length, job.currentStage, stageElapsedMin, job.site)
     const text   = `⏱ Deployment still running after ${elapsedMin} min on ${siteLabel}`
     if (slackThreadTs) {
       void postThreadBlocks(slackThreadTs, blocks, text)
@@ -122,7 +125,33 @@ export async function executeJob(job: Job): Promise<void> {
     }
     slackThreadTs = await startDeploymentThread(job.source, job.destination, siteLabel, job.site)
 
-    // 3. Check uncommitted changes via JSON (structured, not fragile string matching)
+    // 3. Check dev connection mode — must be git, not SFTP
+    checkCancelled(job)
+    log('status', 'Checking dev connection mode...')
+    const connInfo = await run(`terminus connection:info ${job.site}.dev --format=json 2>/dev/null`, job)
+    try {
+      const cleaned = connInfo.stdout.split('\n').filter(l => !/^\s*(Deprecated|Warning|Notice|PHP):/i.test(l)).join('\n').trim()
+      const start = cleaned.search(/[{[]/)
+      if (start !== -1) {
+        const connData = JSON.parse(cleaned.slice(start))
+        const mode = (connData?.sftp_url || connData?.sftp_command) ? 'sftp' : null
+        const explicit = connData?.connection_mode ?? connData?.connection_type ?? null
+        const isSftp = explicit ? /sftp/i.test(String(explicit)) : mode === 'sftp'
+        if (isSftp) {
+          const msg = `Dev is in SFTP mode — switch to git mode before deploying`
+          log('error', msg)
+          void postThreadBlocks(slackThreadTs, buildFailedBlocks(job.source, job.destination, siteLabel, msg, job.site), msg)
+          throw new Error(msg)
+        }
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('SFTP mode')) throw e
+      log('warn', 'Could not determine dev connection mode — proceeding')
+    }
+    log('info', 'Dev connection mode: git ✓')
+    postStep('✓ Dev is in git mode')
+
+    // 4. Check uncommitted changes via JSON (structured, not fragile string matching)
     checkCancelled(job)
     log('status', 'Checking for uncommitted changes...')
     for (const env of ['dev', 'test', 'live']) {
@@ -139,7 +168,10 @@ export async function executeJob(job: Job): Promise<void> {
         hasChanges = diff.stdout.includes('files changed') || diff.stdout.includes('ahead')
       }
       if (hasChanges) {
-        throw new Error(`Uncommitted or undeployed code exists in ${env}. Commit and deploy before proceeding.`)
+        const msg = `Uncommitted changes detected in ${env} — commit and deploy before proceeding`
+        log('error', msg)
+        void postThreadBlocks(slackThreadTs, buildFailedBlocks(job.source, job.destination, siteLabel, msg, job.site), msg)
+        throw new Error(msg)
       }
     }
     log('info', 'No uncommitted changes detected')
@@ -165,10 +197,31 @@ export async function executeJob(job: Job): Promise<void> {
         const devAhead = !sourceLogResult.stdout.includes(devHash)
 
         if (devAhead) {
-          if (job.autoApprove) {
-            // Scheduled: auto-merge silently — no human available to respond to a prompt
-            log('warn', `Master is ahead of ${job.source} — auto-merging for scheduled deployment`)
-            postStep(`↙ Auto-merging dev → \`${job.source}\` (master is ahead)...`)
+          // Always prompt via Slack thread — both manual and scheduled require human confirmation
+          log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
+          const alignPayload = {
+            approvalType: 'alignment' as const,
+            message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+          }
+          emit({ type: 'awaiting-approval', ...alignPayload })
+          job.status = 'awaiting-approval'
+          void postThreadBlocks(
+            slackThreadTs,
+            buildApprovalBlocks(
+              job.id,
+              `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+              'Merge',
+              'Cancel',
+            ),
+            `Master went ahead of ${job.source} on ${siteLabel}`,
+          )
+          const shouldMerge = await waitForApproval(job, alignPayload)
+          job.status = 'running'
+          checkCancelled(job)
+
+          if (shouldMerge) {
+            log('status', `Merging dev into ${job.source}...`)
+            postStep(`↙ Merging dev → \`${job.source}\`...`)
             const mergeLines: string[] = []
             const r = await runStream(
               `terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`,
@@ -180,44 +233,7 @@ export async function executeJob(job: Job): Promise<void> {
             log('success', `Merged dev into ${job.source}`)
             postStep(`✓ Merged dev into \`${job.source}\``)
           } else {
-            // Manual: Slack thread prompt — human decides merge or cancel
-            log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
-            const alignPayload = {
-              approvalType: 'alignment' as const,
-              message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-            }
-            emit({ type: 'awaiting-approval', ...alignPayload })
-            job.status = 'awaiting-approval'
-            void postThreadBlocks(
-              slackThreadTs,
-              buildApprovalBlocks(
-                job.id,
-                `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-                'Merge',
-                'Cancel',
-              ),
-              `Master went ahead of ${job.source} on ${siteLabel}`,
-            )
-            const shouldMerge = await waitForApproval(job, alignPayload)
-            job.status = 'running'
-            checkCancelled(job)
-
-            if (shouldMerge) {
-              log('status', `Merging dev into ${job.source}...`)
-              postStep(`↙ Merging dev → \`${job.source}\`...`)
-              const mergeLines: string[] = []
-              const r = await runStream(
-                `terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`,
-                (line) => { log('info', line); mergeLines.push(line) },
-                job,
-              )
-              checkCancelled(job)
-              if (r.code !== 0) throw new Error(`Failed to merge dev into ${job.source}: ${mergeLines.slice(-3).join(' ')}`)
-              log('success', `Merged dev into ${job.source}`)
-              postStep(`✓ Merged dev into \`${job.source}\``)
-            } else {
-              throw new CancelledError()
-            }
+            throw new CancelledError()
           }
         } else {
           log('info', `dev is aligned with ${job.source} — no merge needed`)
@@ -225,7 +241,7 @@ export async function executeJob(job: Job): Promise<void> {
       }
     }
 
-    // 5. Pending pipeline deploy check (informational only)
+    // 5. Pending pipeline deploy check — warn for dev→test gap; prompt to stop if test→live gap
     checkCancelled(job)
     if (job.stages.includes('test')) {
       const devHash = await getLatestCommitHash(job.site, 'dev')
@@ -238,7 +254,28 @@ export async function executeJob(job: Job): Promise<void> {
       const testHash = await getLatestCommitHash(job.site, 'test')
       const liveLog  = await run(`terminus env:code-log ${job.site}.live --field=hash 2>/dev/null`, job)
       if (testHash && !liveLog.stdout.includes(testHash)) {
-        log('warn', 'test has commits not yet deployed to live')
+        log('warn', 'test has code not yet deployed to live — prompting before proceeding')
+        const pipelinePayload = {
+          approvalType: 'alignment' as const,
+          message: `Test has code not yet deployed to live on \`${siteLabel}\`. This may be from a prior paused deployment. Proceed or stop?`,
+        }
+        emit({ type: 'awaiting-approval', ...pipelinePayload })
+        job.status = 'awaiting-approval'
+        void postThreadBlocks(
+          slackThreadTs,
+          buildApprovalBlocks(
+            job.id,
+            `⚠ Test has undeployed code on \`${siteLabel}\`. Could be a prior paused deployment. Proceed anyway or stop?`,
+            'Proceed',
+            'Stop',
+          ),
+          `Test has undeployed code on ${siteLabel} — confirmation needed`,
+        )
+        const proceed = await waitForApproval(job, pipelinePayload)
+        job.status = 'running'
+        checkCancelled(job)
+        if (!proceed) throw new CancelledError()
+        log('info', 'Proceeding despite test→live gap — approved')
       }
     }
 
@@ -256,6 +293,7 @@ export async function executeJob(job: Job): Promise<void> {
 
       checkCancelled(job)
       job.currentStage = stage
+      stageStartedAt = Date.now()
       emit({ type: 'stage-start', stage })
       log('status', `Preparing ${stage} environment...`)
 
@@ -329,7 +367,8 @@ export async function executeJob(job: Job): Promise<void> {
           }
           emit({ type: 'awaiting-approval', ...stagePayload })
           job.status = 'awaiting-approval'
-          void broadcastMessage(
+          void postThreadBlocks(
+            slackThreadTs,
             buildApprovalBlocks(
               job.id,
               `\`${job.source}\` deployed to \`${stage}\` on \`${siteLabel}\`. Ready to continue to \`${nextStage}\`?`,
