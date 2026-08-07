@@ -174,42 +174,31 @@ export async function executeJob(job: Job): Promise<void> {
     // 3. Check dev connection mode — if SFTP, offer to switch to git or pause
     checkCancelled(job)
     log('status', 'Checking dev connection mode...')
-    const connInfo = await run(`terminus connection:info ${job.site}.dev --format=json 2>/dev/null`, job)
-    try {
-      const cleaned = connInfo.stdout.split('\n').filter(l => !/^\s*(Deprecated|Warning|Notice|PHP):/i.test(l)).join('\n').trim()
-      const start = cleaned.search(/[{[]/)
-      if (start !== -1) {
-        const connData = JSON.parse(cleaned.slice(start))
-        const explicit = connData?.connection_mode ?? connData?.connection_type ?? null
-        const isSftp = explicit
-          ? /sftp/i.test(String(explicit))
-          : Boolean(connData?.sftp_url || connData?.sftp_command)
-        if (isSftp) {
-          log('warn', 'Dev is in SFTP mode — prompting')
-          const shouldSwitch = await prompt(
-            'alignment',
-            `Dev is in SFTP mode on \`${siteLabel}\`. Switch to git mode (uncommitted SFTP changes will be lost) or pause to commit first?`,
-            'Switch to git',
-            'Pause',
-            `Dev in SFTP mode on ${siteLabel}`,
-          )
-          if (shouldSwitch) {
-            log('status', 'Switching dev to git mode...')
-            const r = await run(`terminus connection:set ${job.site}.dev git 2>&1`, job)
-            if (r.code !== 0) throw new Error(`Failed to switch dev to git mode: ${r.stdout.trim()}`)
-            log('success', 'Dev switched to git mode')
-            postStep('✓ Dev switched to git mode')
-          } else {
-            await pauseHere('dev is in SFTP mode — switch to git and commit before resuming')
-          }
-        }
+    const connModeResult = await run(`terminus env:info ${job.site}.dev --field=connection_mode 2>/dev/null`, job)
+    const connMode = connModeResult.stdout.split('\n').map(l => l.trim()).find(l => /^(git|sftp)$/i.test(l))?.toLowerCase()
+    if (!connMode) {
+      log('warn', 'Could not determine dev connection mode — skipping check')
+    } else if (connMode === 'sftp') {
+      log('warn', 'Dev is in SFTP mode — prompting')
+      const shouldSwitch = await prompt(
+        'alignment',
+        `Dev is in SFTP mode on \`${siteLabel}\`. Switch to git mode (uncommitted SFTP changes will be lost) or pause to commit first?`,
+        'Switch to git',
+        'Pause',
+        `Dev in SFTP mode on ${siteLabel}`,
+      )
+      if (shouldSwitch) {
+        log('status', 'Switching dev to git mode...')
+        const r = await run(`terminus connection:set ${job.site}.dev git 2>&1`, job)
+        if (r.code !== 0) throw new Error(`Failed to switch dev to git mode: ${r.stdout.trim()}`)
+        log('success', 'Dev switched to git mode')
+        postStep('✓ Dev switched to git mode')
+      } else {
+        await pauseHere('dev is in SFTP mode — switch to git and commit before resuming')
       }
-    } catch (e) {
-      if (e instanceof PauseError || (e instanceof Error && e.message.includes('git mode'))) throw e
-      log('warn', 'Could not determine dev connection mode — proceeding')
     }
-    log('info', 'Dev connection mode: git ✓')
-    postStep('✓ Dev is in git mode')
+    log('info', `Dev connection mode: ${connMode ?? 'unknown'} ✓`)
+    postStep(`✓ Dev is in ${connMode ?? 'git'} mode`)
 
     // 4. Check uncommitted changes — offer to pause or stop per environment
     checkCancelled(job)
