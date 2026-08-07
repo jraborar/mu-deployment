@@ -2,6 +2,7 @@ import { runDueSchedules } from '@/lib/scheduler'
 import { getAllJobs } from '@/lib/jobStore'
 import { finalizeDeploymentRecord, cleanupStaleRunningRecords, listSchedules } from '@/lib/supabase'
 import { broadcastMessage, buildScheduledBlocks, isSlackConfigured, isPumbleConfigured } from '@/lib/slack'
+import { startSocketMode } from '@/lib/socketMode'
 
 export const runtime = 'nodejs'
 
@@ -78,7 +79,10 @@ async function serverInit() {
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('SIGINT',  () => shutdown('SIGINT'))
 
-  // Socket Mode is started at server boot via instrumentation.ts — no-op here
+  // Socket Mode: instrumentation.ts starts it at boot, but call here as fallback
+  // in case instrumentation didn't run (e.g. env vars not yet available at boot).
+  // The singleton in lib/socketMode.ts ensures it only connects once.
+  void startSocketMode()
 }
 
 // Called by GitHub Actions, system cron, or manually:
