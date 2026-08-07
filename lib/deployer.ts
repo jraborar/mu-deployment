@@ -68,10 +68,13 @@ export async function executeJob(job: Job): Promise<void> {
     if (longRunningInterval) clearInterval(longRunningInterval)
   }
 
+  let stageStartedAt: number | null = null
+
   const sendProgressAlert = () => {
     if (!['running', 'awaiting-approval'].includes(job.status)) return
-    const elapsedMin = Math.floor((Date.now() - startedAt) / 60000)
-    const blocks = buildLongRunningBlocks(job.source, job.destination, siteLabel, elapsedMin, job.completedStages.length, job.stages.length, job.currentStage, job.site)
+    const elapsedMin      = Math.floor((Date.now() - startedAt) / 60000)
+    const stageElapsedMin = stageStartedAt ? Math.floor((Date.now() - stageStartedAt) / 60000) : null
+    const blocks = buildLongRunningBlocks(job.source, job.destination, siteLabel, elapsedMin, job.completedStages.length, job.stages.length, job.currentStage, stageElapsedMin, job.site)
     const text   = `⏱ Deployment still running after ${elapsedMin} min on ${siteLabel}`
     if (slackThreadTs) {
       void postThreadBlocks(slackThreadTs, blocks, text)
@@ -165,10 +168,31 @@ export async function executeJob(job: Job): Promise<void> {
         const devAhead = !sourceLogResult.stdout.includes(devHash)
 
         if (devAhead) {
-          if (job.autoApprove) {
-            // Scheduled: auto-merge silently — no human available to respond to a prompt
-            log('warn', `Master is ahead of ${job.source} — auto-merging for scheduled deployment`)
-            postStep(`↙ Auto-merging dev → \`${job.source}\` (master is ahead)...`)
+          // Always prompt via Slack thread — both manual and scheduled require human confirmation
+          log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
+          const alignPayload = {
+            approvalType: 'alignment' as const,
+            message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+          }
+          emit({ type: 'awaiting-approval', ...alignPayload })
+          job.status = 'awaiting-approval'
+          void postThreadBlocks(
+            slackThreadTs,
+            buildApprovalBlocks(
+              job.id,
+              `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
+              'Merge',
+              'Cancel',
+            ),
+            `Master went ahead of ${job.source} on ${siteLabel}`,
+          )
+          const shouldMerge = await waitForApproval(job, alignPayload)
+          job.status = 'running'
+          checkCancelled(job)
+
+          if (shouldMerge) {
+            log('status', `Merging dev into ${job.source}...`)
+            postStep(`↙ Merging dev → \`${job.source}\`...`)
             const mergeLines: string[] = []
             const r = await runStream(
               `terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`,
@@ -180,44 +204,7 @@ export async function executeJob(job: Job): Promise<void> {
             log('success', `Merged dev into ${job.source}`)
             postStep(`✓ Merged dev into \`${job.source}\``)
           } else {
-            // Manual: Slack thread prompt — human decides merge or cancel
-            log('warn', `Master is ahead of ${job.source} — awaiting decision before snapshot`)
-            const alignPayload = {
-              approvalType: 'alignment' as const,
-              message: `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-            }
-            emit({ type: 'awaiting-approval', ...alignPayload })
-            job.status = 'awaiting-approval'
-            void postThreadBlocks(
-              slackThreadTs,
-              buildApprovalBlocks(
-                job.id,
-                `Master went ahead of \`${job.source}\` on \`${siteLabel}\`. Would you like to merge or cancel?`,
-                'Merge',
-                'Cancel',
-              ),
-              `Master went ahead of ${job.source} on ${siteLabel}`,
-            )
-            const shouldMerge = await waitForApproval(job, alignPayload)
-            job.status = 'running'
-            checkCancelled(job)
-
-            if (shouldMerge) {
-              log('status', `Merging dev into ${job.source}...`)
-              postStep(`↙ Merging dev → \`${job.source}\`...`)
-              const mergeLines: string[] = []
-              const r = await runStream(
-                `terminus multidev:merge-from-dev --updatedb ${job.site}.${job.source} 2>&1`,
-                (line) => { log('info', line); mergeLines.push(line) },
-                job,
-              )
-              checkCancelled(job)
-              if (r.code !== 0) throw new Error(`Failed to merge dev into ${job.source}: ${mergeLines.slice(-3).join(' ')}`)
-              log('success', `Merged dev into ${job.source}`)
-              postStep(`✓ Merged dev into \`${job.source}\``)
-            } else {
-              throw new CancelledError()
-            }
+            throw new CancelledError()
           }
         } else {
           log('info', `dev is aligned with ${job.source} — no merge needed`)
@@ -256,6 +243,7 @@ export async function executeJob(job: Job): Promise<void> {
 
       checkCancelled(job)
       job.currentStage = stage
+      stageStartedAt = Date.now()
       emit({ type: 'stage-start', stage })
       log('status', `Preparing ${stage} environment...`)
 
@@ -329,7 +317,8 @@ export async function executeJob(job: Job): Promise<void> {
           }
           emit({ type: 'awaiting-approval', ...stagePayload })
           job.status = 'awaiting-approval'
-          void broadcastMessage(
+          void postThreadBlocks(
+            slackThreadTs,
             buildApprovalBlocks(
               job.id,
               `\`${job.source}\` deployed to \`${stage}\` on \`${siteLabel}\`. Ready to continue to \`${nextStage}\`?`,

@@ -623,10 +623,19 @@ export default function Page() {
     if (el) el.scrollTop = el.scrollHeight
   }, [logs])
 
-  // Reconnect from sessionStorage + kick the scheduler singleton on mount
+  // Reconnect from sessionStorage, or fall back to any active in-memory job + kick the scheduler
   useEffect(() => {
     const saved = sessionStorage.getItem('mu-deploy-job-id')
-    if (saved) setJobId(saved)
+    if (saved) {
+      setJobId(saved)
+    } else {
+      fetch('/api/jobs')
+        .then(r => r.json())
+        .then((jobs: RunningJobItem[]) => {
+          if (jobs.length > 0) setJobId(jobs[0].id)
+        })
+        .catch(() => {})
+    }
     fetch('/api/cron/trigger').catch(() => {})
   }, [])
 

@@ -158,17 +158,17 @@ function formatSite(name: string, siteId?: string): string {
 export function buildLongRunningBlocks(
   source: string, destination: string, site: string,
   elapsedMin: number, done: number, total: number, currentStage: string | null,
+  stageElapsedMin: number | null,
   siteId?: string,
 ): (Block | KnownBlock)[] {
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0
-  const filled = Math.round(pct / 10)
-  const bar = '█'.repeat(filled) + '░'.repeat(10 - filled)
-  const stage = currentStage ? `Currently: \`${currentStage}\`` : 'Finalizing...'
+  const stageLabel  = currentStage
+    ? `Stage ${done + 1}/${total} · \`${currentStage}\`${stageElapsedMin !== null ? ` · ${stageElapsedMin} min in this stage` : ''}`
+    : `${done}/${total} stages complete · finalizing...`
   return [{
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `⏱ *Deployment running longer than usual*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n\`[${bar}] ${pct}%\` · ${done}/${total} stages · ${elapsedMin} min elapsed\n${stage}`,
+      text: `⏱ *Deployment running longer than usual*\n\`${source} → ${destination}\` on ${formatSite(site, siteId)}\n${stageLabel}\n_${elapsedMin} min total elapsed_`,
     },
   }]
 }
