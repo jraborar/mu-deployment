@@ -372,105 +372,147 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
   )
 }
 
+interface JobApproval {
+  approvalType: string
+  message: string
+  approveLabel?: string | null
+  rejectLabel?: string | null
+  nextStage?: string | null
+}
+
 function RunningJobCard({
-  job, logs, siteName, onEvict,
+  job, logs, siteName, approval, onApprove, onReject, onEvict,
 }: {
   job: RunningJobItem
   logs: LogEntry[]
-  siteName: string  // human-readable label (may equal site UUID if unresolved)
+  siteName: string
+  approval?: JobApproval | null
+  onApprove?: () => void
+  onReject?: () => void
   onEvict?: () => void
 }) {
-  const logRef = useRef<HTMLDivElement>(null)
+  const logRef    = useRef<HTMLDivElement>(null)
+  const [open, setOpen]           = useState(true)
   const [confirming, setConfirming] = useState(false)
   const elapsedMin = Math.floor((Date.now() - job.startedAt) / 60000)
+  const isPending  = job.status === 'awaiting-approval' && Boolean(approval)
+
+  // Auto-expand when approval is pending
+  useEffect(() => { if (isPending) setOpen(true) }, [isPending])
 
   useEffect(() => {
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [logs])
+  }, [logs, open])
+
+  const statusLabel = isPending ? 'awaiting approval' : 'running'
+  const statusCls   = isPending ? 'text-pantheon-yellow animate-pulse' : 'text-pantheon-info animate-pulse'
 
   return (
-    <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card p-4 space-y-3 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="space-y-0.5">
-          {siteName !== job.site ? (
-            <div className="font-mono text-sm font-semibold text-pantheon-info">
-              {siteName}
-              <span className="ml-1.5 font-normal text-pantheon-text-dim text-xs">· {job.site}</span>
-            </div>
-          ) : (
-            <div className="font-mono text-sm font-semibold text-pantheon-info">{job.site}</div>
-          )}
+    <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card animate-fade-in overflow-hidden">
+      {/* Header — always visible, click to expand/collapse */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-pantheon-bg-elevated/40 transition-colors"
+      >
+        <div className="space-y-0.5 min-w-0">
+          <div className="font-mono text-sm font-semibold text-pantheon-info truncate">
+            {siteName !== job.site
+              ? <>{siteName}<span className="ml-1.5 font-normal text-pantheon-text-dim text-xs">· {job.site}</span></>
+              : job.site}
+          </div>
           <div className="font-mono text-xs">
             <span className="text-pantheon-yellow">{job.source}</span>
             <span className="mx-1.5 text-pantheon-text-dim">→</span>
             <span className="text-pantheon-info">{job.destination}</span>
           </div>
         </div>
-        <div className="text-right space-y-0.5">
-          <div className="font-mono text-xs text-pantheon-info animate-pulse">● running</div>
-          <div className="font-mono text-xs text-pantheon-text-dim">{elapsedMin} min elapsed</div>
-          {onEvict && (
-            confirming ? (
-              <div className="flex gap-1 justify-end items-center">
-                <span className="font-mono text-xs text-pantheon-error">Force stop?</span>
-                <button
-                  onClick={() => { setConfirming(false); onEvict() }}
-                  className="rounded border border-pantheon-error/40 px-2 py-0.5 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
-                >Yes</button>
-                <button
-                  onClick={() => setConfirming(false)}
-                  className="rounded border border-pantheon-border px-2 py-0.5 font-mono text-xs text-pantheon-text-muted hover:bg-pantheon-bg-elevated transition-colors"
-                >No</button>
+        <div className="flex items-center gap-3 shrink-0 ml-3">
+          {job.stages.length > 0 && (
+            <div className="hidden sm:flex gap-1.5">
+              {job.stages.map(stage => {
+                const done   = job.completedStages.includes(stage)
+                const active = job.currentStage === stage
+                return (
+                  <span key={stage} className={[
+                    'rounded px-1.5 py-0.5 font-mono text-xs border',
+                    done   ? 'border-pantheon-success/40 text-pantheon-success' :
+                    active ? 'border-pantheon-yellow/40 text-pantheon-yellow' :
+                             'border-pantheon-border text-pantheon-text-dim',
+                  ].join(' ')}>
+                    {done ? '✓' : active ? '⊙' : '○'} {stage}
+                  </span>
+                )
+              })}
+            </div>
+          )}
+          <div className="text-right space-y-0.5">
+            <div className={`font-mono text-xs ${statusCls}`}>● {statusLabel}</div>
+            <div className="font-mono text-xs text-pantheon-text-dim">{elapsedMin} min</div>
+          </div>
+          <span className="font-mono text-xs text-pantheon-text-dim">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {/* Expandable body */}
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-pantheon-border">
+
+          {/* Approval prompt */}
+          {isPending && approval && onApprove && onReject && (
+            <div className="mt-3 rounded-xl border border-pantheon-yellow/40 bg-pantheon-yellow/5 p-4">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="text-pantheon-yellow">⚠</span>
+                <span className="font-mono text-sm font-semibold text-pantheon-yellow">Action required</span>
               </div>
-            ) : (
-              <button
-                onClick={() => setConfirming(true)}
-                className="font-mono text-xs text-pantheon-error/60 hover:text-pantheon-error transition-colors"
-              >✕ Force Stop</button>
-            )
+              <p className="mb-3 font-mono text-xs text-pantheon-text-muted">{approval.message}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={onApprove}
+                  className="rounded-lg bg-pantheon-yellow px-4 py-1.5 font-mono text-xs font-semibold text-black hover:bg-pantheon-yellow-dark transition-colors"
+                >
+                  {approval.approveLabel ?? '✓ Approve'}
+                </button>
+                <button
+                  onClick={onReject}
+                  className="rounded-lg border border-pantheon-border px-4 py-1.5 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi hover:text-pantheon-text transition-colors"
+                >
+                  {approval.rejectLabel ?? '✕ Reject'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Live log */}
+          <div ref={logRef} className="h-36 overflow-y-auto bg-pantheon-bg-console rounded p-3 space-y-0.5 mt-3">
+            {logs.map((entry, i) => {
+              const style = LOG_STYLES[entry.logType] ?? LOG_STYLES.info
+              return (
+                <div key={i} className={`font-mono text-xs ${style.cls}`}>
+                  <span className="opacity-50 mr-1.5">{style.prefix}</span>{entry.message}
+                </div>
+              )
+            })}
+            {logs.length === 0 && <span className="font-mono text-xs text-pantheon-text-dim">Connecting...</span>}
+            <span className="inline-block h-3 w-1 bg-pantheon-yellow animate-blink" />
+          </div>
+
+          {/* Force stop */}
+          {onEvict && (
+            <div className="flex justify-end">
+              {confirming ? (
+                <div className="flex gap-1 items-center">
+                  <span className="font-mono text-xs text-pantheon-error">Force stop?</span>
+                  <button onClick={() => { setConfirming(false); onEvict() }} className="rounded border border-pantheon-error/40 px-2 py-0.5 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors">Yes</button>
+                  <button onClick={() => setConfirming(false)} className="rounded border border-pantheon-border px-2 py-0.5 font-mono text-xs text-pantheon-text-muted hover:bg-pantheon-bg-elevated transition-colors">No</button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirming(true)} className="font-mono text-xs text-pantheon-error/60 hover:text-pantheon-error transition-colors">✕ Force Stop</button>
+              )}
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Stage indicators */}
-      {job.stages.length > 0 && (
-        <div className="flex gap-2">
-          {job.stages.map(stage => {
-            const done   = job.completedStages.includes(stage)
-            const active = job.currentStage === stage
-            return (
-              <div key={stage} className={[
-                'flex items-center gap-1 rounded px-2 py-0.5 font-mono text-xs border',
-                done   ? 'border-pantheon-success/40 text-pantheon-success' :
-                active ? 'border-pantheon-yellow/40 text-pantheon-yellow' :
-                         'border-pantheon-border text-pantheon-text-dim',
-              ].join(' ')}>
-                {done ? '✓' : active ? '⊙' : '○'} {stage}
-              </div>
-            )
-          })}
-        </div>
       )}
-
-      {/* Live log */}
-      <div
-        ref={logRef}
-        className="h-40 overflow-y-auto bg-pantheon-bg-console rounded p-3 space-y-0.5"
-      >
-        {logs.map((entry, i) => {
-          const style = LOG_STYLES[entry.logType] ?? LOG_STYLES.info
-          return (
-            <div key={i} className={`font-mono text-xs ${style.cls}`}>
-              <span className="opacity-50 mr-1.5">{style.prefix}</span>{entry.message}
-            </div>
-          )
-        })}
-        {logs.length === 0 && (
-          <span className="font-mono text-xs text-pantheon-text-dim">Connecting...</span>
-        )}
-        <span className="inline-block h-3 w-1 bg-pantheon-yellow animate-blink" />
-      </div>
     </div>
   )
 }
@@ -587,6 +629,7 @@ export default function Page() {
   const [runningJobs, setRunningJobs]   = useState<RunningJobItem[]>([])
   const [jobLogs, setJobLogs]           = useState<Record<string, LogEntry[]>>({})
   const [jobStages, setJobStages]       = useState<Record<string, Pick<RunningJobItem, 'stages' | 'completedStages' | 'currentStage' | 'status'>>>({})
+  const [jobApprovals, setJobApprovals] = useState<Record<string, JobApproval>>({})
   const sseConnections = useRef<Record<string, EventSource>>({})
 
   const [resetCountdown, setResetCountdown] = useState<number | null>(null)
@@ -706,9 +749,26 @@ export default function Page() {
               },
             }))
           }
+          if (data.type === 'awaiting-approval') {
+            setJobApprovals(prev => ({
+              ...prev,
+              [job.id]: {
+                approvalType: data.approvalType as string,
+                message:      data.message as string,
+                approveLabel: (data.approveLabel as string) ?? null,
+                rejectLabel:  (data.rejectLabel as string) ?? null,
+                nextStage:    (data.nextStage as string) ?? null,
+              },
+            }))
+            setJobStages(prev => ({ ...prev, [job.id]: { ...prev[job.id], stages: prev[job.id]?.stages ?? [], completedStages: prev[job.id]?.completedStages ?? [], currentStage: prev[job.id]?.currentStage ?? null, status: 'awaiting-approval' } }))
+          }
+          if (data.type === 'stage-start' || data.type === 'stage-complete') {
+            setJobApprovals(prev => { const n = { ...prev }; delete n[job.id]; return n })
+          }
           if (data.type === 'complete') {
             es.close()
             delete connections[job.id]
+            setJobApprovals(prev => { const n = { ...prev }; delete n[job.id]; return n })
             setRunningJobs(prev => prev.filter(j => j.id !== job.id))
             fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
           }
@@ -898,7 +958,18 @@ export default function Page() {
   const evictJob = async (id: string) => {
     await fetch(`/api/deploy/${id}/evict`, { method: 'POST' })
     setRunningJobs(prev => prev.filter(j => j.id !== id))
+    setJobApprovals(prev => { const n = { ...prev }; delete n[id]; return n })
     fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
+  }
+
+  const sendApprovalForJob = async (id: string, approved: boolean) => {
+    await fetch(`/api/approve/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved }),
+    })
+    setJobApprovals(prev => { const n = { ...prev }; delete n[id]; return n })
+    setJobStages(prev => ({ ...prev, [id]: { ...prev[id], status: 'running' } }))
   }
 
   const cancelDeployment = async () => {
@@ -1408,13 +1479,17 @@ export default function Page() {
                 </h2>
                 {runningJobs.map(job => {
                   const liveStages = jobStages[job.id]
-                  const siteName = job.site_name ?? schedules.find(s => s.site === job.site)?.site_name ?? job.site
+                  const siteName   = job.site_name ?? schedules.find(s => s.site === job.site)?.site_name ?? job.site
+                  const approval   = jobApprovals[job.id] ?? null
                   return (
                     <RunningJobCard
                       key={job.id}
                       job={liveStages ? { ...job, ...liveStages } : job}
                       logs={jobLogs[job.id] ?? []}
                       siteName={siteName}
+                      approval={approval}
+                      onApprove={() => sendApprovalForJob(job.id, true)}
+                      onReject={() => sendApprovalForJob(job.id, false)}
                       onEvict={() => evictJob(job.id)}
                     />
                   )
