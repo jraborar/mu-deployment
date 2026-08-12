@@ -24,6 +24,19 @@ function streamJob(job: Job, request: NextRequest): Response {
         return
       }
 
+      // Replay approval state on reconnect so UI shows buttons immediately
+      if (job.status === 'awaiting-approval' && job.pendingApproval) {
+        send({
+          type:         'awaiting-approval',
+          approvalType: job.pendingApproval.approvalType,
+          message:      job.pendingApproval.message,
+          nextStage:    job.pendingApproval.nextStage,
+          diffStat:     job.pendingApproval.diffStat,
+          approveLabel: job.pendingApproval.approveLabel,
+          rejectLabel:  job.pendingApproval.rejectLabel,
+        })
+      }
+
       const onEvent = (data: object) => send(data)
       const onDone  = () => { try { controller.close() } catch {} }
 
