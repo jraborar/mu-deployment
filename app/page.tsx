@@ -768,25 +768,27 @@ export default function Page() {
     if (el) el.scrollTop = el.scrollHeight
   }, [logs])
 
-  // Auto-connect on mount — sessionStorage first, then /api/jobs fallback
+  // Auto-connect on mount — sessionStorage first, then /api/jobs fallback.
+  // Uses reconnectToRef so this effect only fires once (empty deps) without
+  // capturing a stale closure.
   useEffect(() => {
     const saved = sessionStorage.getItem('mu-deploy-job-id')
     if (saved) {
       setJobId(saved)
-      reconnectTo(saved)
+      reconnectToRef.current(saved)
     } else {
       fetch('/api/jobs')
         .then(r => r.json())
         .then((jobs: RunningJobItem[]) => {
           if (jobs.length > 0) {
             setJobId(jobs[0].id)
-            reconnectTo(jobs[0].id)
+            reconnectToRef.current(jobs[0].id)
           }
         })
         .catch(() => {})
     }
     fetch('/api/cron/trigger').catch(() => {})
-  }, [reconnectTo])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch schedules and history when tabs open
   useEffect(() => {
@@ -1030,6 +1032,10 @@ export default function Page() {
       if ((err as Error).name !== 'AbortError') reset()
     }
   }, [streamWithAutoReconnect]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stable ref so the mount effect can call reconnectTo without re-running every render
+  const reconnectToRef = useRef(reconnectTo)
+  useEffect(() => { reconnectToRef.current = reconnectTo }, [reconnectTo])
 
   const reconnect = async () => {
     if (!jobId) return
