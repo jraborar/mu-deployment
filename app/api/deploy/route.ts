@@ -16,6 +16,20 @@ function streamJob(job: Job, request: NextRequest): Response {
         } catch {}
       }
 
+      // Send current job state first so any reconnecting window restores full UI
+      send({
+        type:            'job-meta',
+        site:            job.site,
+        site_name:       job.site_name ?? null,
+        source:          job.source,
+        destination:     job.destination,
+        label:           job.label,
+        stages:          job.stages,
+        completedStages: job.completedStages,
+        currentStage:    job.currentStage,
+        status:          job.status,
+      })
+
       for (const entry of job.logs) send(entry)
 
       if (['completed', 'failed', 'paused'].includes(job.status)) {
