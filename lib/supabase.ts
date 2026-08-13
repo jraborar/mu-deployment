@@ -99,11 +99,23 @@ export async function cancelSchedule(id: string): Promise<void> {
   await db.from('scheduled_deployments').update({ status: 'cancelled' }).eq('id', id)
 }
 
-export async function updateSchedule(id: string, updates: Partial<Pick<ScheduleRecord, 'scheduled_for' | 'notes'>>): Promise<void> {
+export async function updateSchedule(id: string, updates: Partial<Pick<ScheduleRecord, 'scheduled_for' | 'notes' | 'destination'>>): Promise<void> {
   const db = getClient()
   if (!db) return
   const { error } = await db.from('scheduled_deployments').update(updates).eq('id', id)
   if (error) console.error('[supabase] updateSchedule:', error.message)
+}
+
+export async function getDeploymentById(id: string): Promise<(DeploymentRecord & { logs?: unknown[] }) | null> {
+  const db = getClient()
+  if (!db) return null
+  const { data, error } = await db
+    .from('deployment_history')
+    .select('id, site, site_name, source, destination, stages_completed, status, started_at, completed_at, logs')
+    .eq('id', id)
+    .single()
+  if (error) console.error('[supabase] getDeploymentById:', error.message)
+  return data ?? null
 }
 
 // Writes the human-readable site label to Supabase as soon as it is

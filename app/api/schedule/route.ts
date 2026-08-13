@@ -55,9 +55,11 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
-  const { id, scheduled_for, notes } = body
+  const { id, scheduled_for, notes, destination } = body
   if (!id || !scheduled_for) return Response.json({ error: 'Missing id or scheduled_for' }, { status: 400 })
-  await updateSchedule(id, { scheduled_for, notes })
+  const updates: Record<string, string> = { scheduled_for, notes }
+  if (destination && ['dev', 'test', 'live'].includes(destination)) updates.destination = destination
+  await updateSchedule(id, updates)
   return Response.json({ ok: true })
 }
 

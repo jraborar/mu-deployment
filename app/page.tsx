@@ -172,14 +172,15 @@ const editInputCls = [
 ].join(' ')
 
 function ScheduleTable({
-  schedules, editingId, editFor, editNotes,
+  schedules, editingId, editFor, editNotes, editDest,
   onEdit, onSave, onCancelEdit, onRunNow, onCancel,
-  setEditFor, setEditNotes,
+  setEditFor, setEditNotes, setEditDest,
 }: {
   schedules: ScheduleItem[]
   editingId: string | null
   editFor: string
   editNotes: string
+  editDest: string
   onEdit: (item: ScheduleItem) => void
   onSave: (id: string) => void
   onCancelEdit: () => void
@@ -187,6 +188,7 @@ function ScheduleTable({
   onCancel: (id: string) => void
   setEditFor: (v: string) => void
   setEditNotes: (v: string) => void
+  setEditDest: (v: string) => void
 }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
 
@@ -217,7 +219,17 @@ function ScheduleTable({
                 <td className="px-4 py-3 font-mono text-sm whitespace-nowrap">
                   <span className="text-pantheon-yellow">{item.source}</span>
                   <span className="mx-1.5 text-pantheon-text-dim">→</span>
-                  <span className="text-pantheon-info">{item.destination}</span>
+                  {isEditing ? (
+                    <select
+                      value={editDest}
+                      onChange={e => setEditDest(e.target.value)}
+                      className="rounded border border-pantheon-border bg-pantheon-bg px-2 py-0.5 font-mono text-xs text-pantheon-text outline-none focus:border-pantheon-yellow"
+                    >
+                      {['dev','test','live'].map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  ) : (
+                    <span className="text-pantheon-info">{item.destination}</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-sm text-pantheon-text-muted">
                   {isEditing ? (
@@ -315,6 +327,10 @@ function ScheduleTable({
 }
 
 function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: HistoryItem) => void }) {
+  const [open, setOpen]       = useState(false)
+  const [logs, setLogs]       = useState<LogEntry[] | null>(null)
+  const [loading, setLoading] = useState(false)
+
   const statusColors: Record<string, string> = {
     completed: 'text-pantheon-success',
     failed:    'text-pantheon-error',
@@ -322,52 +338,122 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
     cancelled: 'text-pantheon-text-muted',
     running:   'text-pantheon-info animate-pulse',
   }
-  const siteColor = statusColors[item.status] ?? 'text-pantheon-text-muted'
-  const endLabel  = item.status === 'failed' ? 'Exited:' : item.status === 'paused' ? 'Paused:' : 'Completed:'
+  const borderColors: Record<string, string> = {
+    completed: 'border-pantheon-success/30',
+    failed:    'border-pantheon-error/30',
+    paused:    'border-pantheon-warning/30',
+    cancelled: 'border-pantheon-border',
+    running:   'border-pantheon-info/30',
+  }
+  const siteColor   = statusColors[item.status] ?? 'text-pantheon-text-muted'
+  const borderColor = borderColors[item.status] ?? 'border-pantheon-border'
+  const endLabel    = item.status === 'failed' ? 'Failed:' : item.status === 'paused' ? 'Paused:' : item.status === 'cancelled' ? 'Cancelled:' : 'Completed:'
   const fmt = (ts: string) =>
-    new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+    new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const dur = (s: string, e: string) => {
+    const m = Math.round((new Date(e).getTime() - new Date(s).getTime()) / 60000)
+    return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`
+  }
+
+  const toggle = async () => {
+    const next = !open
+    setOpen(next)
+    if (next && logs === null) {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/deployments/${item.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setLogs((data.logs as LogEntry[]) ?? [])
+        }
+      } catch {}
+      setLoading(false)
+    }
+  }
+
+  const keyLogs = logs
+    ? logs.filter(l => ['error', 'warn', 'success'].includes(l.logType)).slice(-5)
+    : []
 
   return (
-    <div className="rounded-lg border border-pantheon-border bg-pantheon-bg-elevated p-4 space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="truncate mr-4">
-          {item.site_name ? (
-            <span className={`font-mono text-sm font-semibold ${siteColor}`}>
-              {item.site_name}
-              <span className="ml-1.5 font-normal text-pantheon-text-dim text-xs">· {item.site}</span>
-            </span>
-          ) : (
-            <span className={`font-mono text-sm font-semibold ${siteColor}`}>{item.site}</span>
-          )}
+    <div className={`rounded-lg border ${borderColor} bg-pantheon-bg-elevated overflow-hidden`}>
+      {/* Header */}
+      <button onClick={toggle} className="w-full flex items-center justify-between p-4 text-left hover:bg-pantheon-bg-card/50 transition-colors">
+        <div className="min-w-0 space-y-0.5">
+          <div className="truncate">
+            {item.site_name ? (
+              <span className={`font-mono text-sm font-semibold ${siteColor}`}>
+                {item.site_name}
+                <span className="ml-1.5 font-normal text-pantheon-text-dim text-xs">· {item.site}</span>
+              </span>
+            ) : (
+              <span className={`font-mono text-sm font-semibold ${siteColor}`}>{item.site}</span>
+            )}
+          </div>
+          <div className="font-mono text-xs">
+            <span className="text-pantheon-yellow">{item.source}</span>
+            <span className="mx-1.5 text-pantheon-text-dim">→</span>
+            <span className="text-pantheon-info">{item.destination}</span>
+            {item.stages_completed.length > 0 && (
+              <span className="ml-2 text-pantheon-text-dim">({item.stages_completed.join(' → ')})</span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 ml-3">
+          <div className="text-right space-y-0.5">
+            <div className={`font-mono text-xs font-semibold ${siteColor}`}>{item.status}</div>
+            {item.completed_at && (
+              <div className="font-mono text-xs text-pantheon-text-dim">{dur(item.started_at, item.completed_at)}</div>
+            )}
+          </div>
+          <span className="font-mono text-xs text-pantheon-text-dim">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {/* Expanded detail */}
+      {open && (
+        <div className="border-t border-pantheon-border px-4 pb-4 pt-3 space-y-3">
+          {/* Timestamps */}
+          <div className={`flex flex-wrap gap-x-4 font-mono text-xs ${siteColor}`}>
+            <span>Started: {fmt(item.started_at)}</span>
+            <span>{endLabel} {item.completed_at ? fmt(item.completed_at) : '—'}</span>
+          </div>
+
+          {/* Resume button for paused */}
           {item.status === 'paused' && onResume && (
             <button
               onClick={() => onResume(item)}
-              className="rounded border border-pantheon-warning/40 px-2.5 py-0.5 font-mono text-xs text-pantheon-warning hover:bg-pantheon-warning/10 transition-colors"
+              className="rounded border border-pantheon-warning/40 px-3 py-1 font-mono text-xs text-pantheon-warning hover:bg-pantheon-warning/10 transition-colors"
             >
-              ▶ Resume
+              ▶ Resume deployment
             </button>
           )}
-          <span className={`font-mono text-xs font-semibold ${siteColor}`}>
-            {item.status}
-          </span>
+
+          {/* Key log entries */}
+          {loading && <p className="font-mono text-xs text-pantheon-text-dim">Loading details...</p>}
+          {logs !== null && keyLogs.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-mono text-xs text-pantheon-text-muted uppercase tracking-widest">Key events</p>
+              <div className="bg-pantheon-bg-console rounded p-3 space-y-0.5">
+                {keyLogs.map((entry, i) => {
+                  const style = LOG_STYLES[entry.logType] ?? LOG_STYLES.info
+                  return (
+                    <div key={i} className={`font-mono text-xs ${style.cls}`}>
+                      <span className="opacity-50 mr-1.5">{style.prefix}</span>{entry.message}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {logs !== null && logs.length > 0 && keyLogs.length === 0 && (
+            <p className="font-mono text-xs text-pantheon-text-dim">No key events recorded.</p>
+          )}
+          {logs !== null && logs.length === 0 && (
+            <p className="font-mono text-xs text-pantheon-text-dim">No logs stored for this deployment.</p>
+          )}
         </div>
-      </div>
-      <div className="font-mono text-xs">
-        <span className="text-pantheon-yellow">{item.source}</span>
-        <span className="mx-1.5 text-pantheon-text-dim">→</span>
-        <span className="text-pantheon-info">{item.destination}</span>
-        {item.stages_completed.length > 0 && (
-          <span className="ml-2 text-pantheon-text-dim">
-            ({item.stages_completed.join(' → ')})
-          </span>
-        )}
-      </div>
-      <div className={`flex flex-wrap gap-x-4 font-mono text-xs ${siteColor}`}>
-        <span>Started: {fmt(item.started_at)}</span>
-        <span>{endLabel} {item.completed_at ? fmt(item.completed_at) : '—'}</span>
-      </div>
+      )}
     </div>
   )
 }
@@ -561,6 +647,7 @@ export default function Page() {
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editFor, setEditFor]       = useState('')
   const [editNotes, setEditNotes]   = useState('')
+  const [editDest, setEditDest]     = useState('live')
 
   const [schedFetchedCreatedDate, setSchedFetchedCreatedDate] = useState<Date | null>(null)
   const [schedDateFetching, setSchedDateFetching]             = useState(false)
@@ -681,21 +768,25 @@ export default function Page() {
     if (el) el.scrollTop = el.scrollHeight
   }, [logs])
 
-  // Reconnect from sessionStorage, or fall back to any active in-memory job + kick the scheduler
+  // Auto-connect on mount — sessionStorage first, then /api/jobs fallback
   useEffect(() => {
     const saved = sessionStorage.getItem('mu-deploy-job-id')
     if (saved) {
       setJobId(saved)
+      reconnectTo(saved)
     } else {
       fetch('/api/jobs')
         .then(r => r.json())
         .then((jobs: RunningJobItem[]) => {
-          if (jobs.length > 0) setJobId(jobs[0].id)
+          if (jobs.length > 0) {
+            setJobId(jobs[0].id)
+            reconnectTo(jobs[0].id)
+          }
         })
         .catch(() => {})
     }
     fetch('/api/cron/trigger').catch(() => {})
-  }, [])
+  }, [reconnectTo])
 
   // Fetch schedules and history when tabs open
   useEffect(() => {
@@ -927,21 +1018,22 @@ export default function Page() {
     }
   }
 
-  const reconnect = async () => {
-    if (!jobId) return
+  const reconnectTo = useCallback(async (id: string) => {
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     setDeployStatus('running')
     try {
-      const res = await fetch(`/api/deploy/${jobId}`, { signal: abortRef.current.signal })
-      if (!res.ok) {
-        reset()
-        return
-      }
-      await streamWithAutoReconnect(res, jobId)
+      const res = await fetch(`/api/deploy/${id}`, { signal: abortRef.current.signal })
+      if (!res.ok) { reset(); return }
+      await streamWithAutoReconnect(res, id)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') reset()
     }
+  }, [streamWithAutoReconnect]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const reconnect = async () => {
+    if (!jobId) return
+    reconnectTo(jobId)
   }
 
   const sendApproval = async (approved: boolean) => {
@@ -1006,7 +1098,7 @@ export default function Page() {
     await fetch('/api/schedule', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, scheduled_for: new Date(editFor + ':00+08:00').toISOString(), notes: editNotes }),
+      body: JSON.stringify({ id, scheduled_for: new Date(editFor + ':00+08:00').toISOString(), notes: editNotes, destination: editDest }),
     })
     setEditingId(null)
     const updated = await fetch('/api/schedule').then(r => r.json())
@@ -1439,10 +1531,12 @@ export default function Page() {
               editingId={editingId}
               editFor={editFor}
               editNotes={editNotes}
+              editDest={editDest}
               onEdit={(item) => {
                 setEditingId(item.id)
                 setEditFor(toManilaDatetimeLocal(item.scheduled_for))
                 setEditNotes(item.notes ?? '')
+                setEditDest(item.destination)
               }}
               onSave={saveEdit}
               onCancelEdit={() => setEditingId(null)}
@@ -1450,6 +1544,7 @@ export default function Page() {
               onCancel={cancelSchedule}
               setEditFor={setEditFor}
               setEditNotes={setEditNotes}
+              setEditDest={setEditDest}
             />
           ) : (
             <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
