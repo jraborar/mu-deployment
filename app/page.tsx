@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { Rocket } from 'lucide-react'
 import { computeStages, parseMuSourceDate, addBusinessDays, toDatetimeLocal } from '@/lib/pipeline'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -606,9 +607,9 @@ function RunningJobCard({
 // ── Input + Select shared styles ───────────────────────────────────────────────
 
 const inputCls = [
-  'w-full rounded-lg border border-pantheon-border bg-pantheon-bg-elevated',
-  'px-3.5 py-2.5 font-mono text-sm text-pantheon-text placeholder-pantheon-text-dim',
-  'outline-none transition focus:border-pantheon-yellow focus:ring-1 focus:ring-pantheon-yellow',
+  'w-full rounded-lg border border-slate-600 bg-slate-700',
+  'px-3 py-2 font-mono text-sm text-white placeholder-slate-500',
+  'outline-none transition focus:border-pantheon-yellow',
   'disabled:opacity-50',
 ].join(' ')
 
@@ -1197,77 +1198,92 @@ export default function Page() {
 
           {/* Config form */}
           {(deployStatus === 'idle' || deployStatus === 'paused') && (
-            <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card p-6 space-y-5">
-              {deployStatus === 'paused' && (
-                <div className="rounded-lg border border-pantheon-warning/40 bg-pantheon-warning/5 px-4 py-3 font-mono text-xs text-pantheon-warning">
-                  ⏸ Previous deployment paused after {completedStages[completedStages.length - 1] ?? 'start'}.
-                  Set source to continue from where it left off.
+            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+              {/* Card header */}
+              <div className="px-6 py-5 border-b border-slate-700">
+                <div className="flex items-center gap-2 mb-1">
+                  <Rocket className="w-5 h-5 text-pantheon-yellow" />
+                  <h2 className="text-white font-semibold">New Deployment</h2>
                 </div>
-              )}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="font-mono text-xs text-pantheon-text-muted">Site ID</label>
-                  <input
-                    className={inputCls}
-                    placeholder="my-pantheon-site"
-                    value={site}
-                    onChange={e => setSite(e.target.value)}
-                    disabled={deployStatus !== 'idle'}
-                  />
+                <p className="text-slate-400 text-sm">Deploy a multidev through the pipeline with per-stage approval gates</p>
+              </div>
+
+              <div className="px-6 py-5 space-y-5">
+                {deployStatus === 'paused' && (
+                  <div className="rounded-lg border border-pantheon-warning/40 bg-pantheon-warning/5 px-4 py-3 text-xs text-pantheon-warning">
+                    ⏸ Paused after {completedStages[completedStages.length - 1] ?? 'start'} — update source to resume from where it left off.
+                  </div>
+                )}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-slate-400 font-mono">Site ID</label>
+                    <input
+                      className={inputCls}
+                      placeholder="my-pantheon-site"
+                      value={site}
+                      onChange={e => setSite(e.target.value)}
+                      disabled={deployStatus !== 'idle'}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-slate-400 font-mono">
+                      Source <span className="text-slate-600 normal-case font-normal">(multidev, dev, test or live)</span>
+                    </label>
+                    <input
+                      className={inputCls}
+                      placeholder="autopilot or dev"
+                      value={source}
+                      onChange={e => setSource(e.target.value)}
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-1.5">
-                  <label className="font-mono text-xs text-pantheon-text-muted">
-                    Source <span className="text-pantheon-text-dim">(multidev, dev, test or live)</span>
+                  <label className="text-xs text-slate-400 font-mono">
+                    Commit label <span className="text-slate-600 normal-case font-normal">(used in "Deployed from …")</span>
                   </label>
                   <input
                     className={inputCls}
-                    placeholder="my-feature or dev"
-                    value={source}
-                    onChange={e => setSource(e.target.value)}
+                    placeholder="e.g. autopilot"
+                    value={label}
+                    onChange={e => setLabel(e.target.value)}
                   />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="font-mono text-xs text-pantheon-text-muted">
-                  Commit label <span className="text-pantheon-text-dim">(used in "Pantheon Managed Updates: Deployed from …")</span>
-                </label>
-                <input
-                  className={inputCls}
-                  placeholder="original multidev name e.g. autopilot"
-                  value={label}
-                  onChange={e => setLabel(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="font-mono text-xs text-pantheon-text-muted">Final Destination</label>
-                <div className="flex gap-2">
-                  {DEST_OPTS.map(d => (
-                    <button
-                      key={d}
-                      onClick={() => setDestination(d)}
-                      className={[
-                        'rounded-lg border px-4 py-2 font-mono text-sm transition-colors',
-                        destination === d
-                          ? 'border-pantheon-yellow bg-pantheon-yellow/10 text-pantheon-yellow'
-                          : 'border-pantheon-border text-pantheon-text-muted hover:border-pantheon-border-hi',
-                      ].join(' ')}
-                    >
-                      {d}
-                    </button>
-                  ))}
+
+                <div className="space-y-1.5 pt-1 border-t border-slate-700">
+                  <label className="text-xs text-slate-400 font-mono pt-1">Final destination</label>
+                  <div className="flex gap-2">
+                    {DEST_OPTS.map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setDestination(d)}
+                        className={[
+                          'rounded-lg border px-4 py-2 text-sm transition-colors',
+                          destination === d
+                            ? 'border-pantheon-yellow bg-pantheon-yellow/10 text-pantheon-yellow font-medium'
+                            : 'border-slate-600 text-slate-400 hover:border-slate-500 hover:text-slate-200',
+                        ].join(' ')}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <p className="font-mono text-xs text-pantheon-text-dim">
-                  Pipeline: {computeStages(source, destination).join(' → ') || '—'}
-                </p>
-                <button
-                  onClick={startDeployment}
-                  disabled={!site || !source}
-                  className="rounded-lg bg-pantheon-yellow px-5 py-2.5 font-mono text-sm font-semibold text-black hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ▶ Start Deployment
-                </button>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-700">
+                  <p className="text-xs text-slate-500 font-mono">
+                    Pipeline: <span className="text-slate-300">{computeStages(source, destination).join(' → ') || '—'}</span>
+                  </p>
+                  <button
+                    onClick={startDeployment}
+                    disabled={!site || !source}
+                    className="flex items-center gap-2 rounded-lg bg-pantheon-yellow px-5 py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Rocket className="w-4 h-4" />
+                    Start Deployment
+                  </button>
+                </div>
               </div>
             </div>
           )}
