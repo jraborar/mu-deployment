@@ -14,19 +14,17 @@ export default function UserMenu() {
       .catch(() => setLoaded(true))
   }, [])
 
-  // Always show logout once we know the user is authenticated
-  // (proxy ensures only authenticated users reach this component)
   if (!loaded) return null
 
   return (
     <div className="ml-auto flex items-center gap-4">
       {email && (
-        <span className="font-mono text-xs text-slate-400 hidden sm:block">{email}</span>
+        <span className="font-mono text-xs text-pantheon-yellow hidden sm:block">{email}</span>
       )}
       <form action={logout}>
         <button
           type="submit"
-          className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+          className="rounded-lg border border-pantheon-yellow/60 px-3 py-1.5 text-xs text-pantheon-yellow hover:bg-pantheon-yellow/10 transition-colors"
         >
           Sign out
         </button>
