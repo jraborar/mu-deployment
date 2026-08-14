@@ -626,6 +626,9 @@ export default function Page() {
   const [schedConsultant, setSchedConsultant] = useState('')
   const [schedLoading, setSchedLoading] = useState(false)
   const [schedules, setSchedules]      = useState<ScheduleItem[]>([])
+  const [showSchedForm, setShowSchedForm] = useState(false)
+  const [historyPage, setHistoryPage]  = useState(0)
+  const HISTORY_PAGE_SIZE = 5
 
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editFor, setEditFor]       = useState('')
@@ -1196,7 +1199,7 @@ export default function Page() {
               <div className="px-6 py-5 border-b border-slate-700">
                 <div className="flex items-center gap-2 mb-1">
                   <Rocket className="w-5 h-5 text-pantheon-yellow" />
-                  <h2 className="text-white font-semibold">New Deployment</h2>
+                  <h2 className="text-white font-semibold">Run Deployment</h2>
                 </div>
                 <p className="text-slate-400 text-sm">Deploy a multidev through the pipeline with per-stage approval gates</p>
               </div>
@@ -1400,14 +1403,24 @@ export default function Page() {
 
       {/* ── Schedule tab ────────────────────────────────────────────────────── */}
       {tab === 'schedule' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
+          {/* Section header + toggle button — WP Staging pattern */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-slate-400" />
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">New Deployment</h3>
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Scheduled Deployments</h3>
             </div>
+            <button
+              onClick={() => setShowSchedForm(f => !f)}
+              className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              {showSchedForm ? 'Cancel' : '+ New Deployment'}
+            </button>
           </div>
 
+          {/* Form — hidden until button clicked */}
+          {showSchedForm && (
           <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-700">
               <div className="flex items-center gap-2 mb-1">
@@ -1492,6 +1505,33 @@ export default function Page() {
             </div>
           </div>
           </div>
+          )} {/* end showSchedForm */}
+
+          {/* Existing schedules as cards */}
+          {schedules.length === 0 && !showSchedForm && (
+            <div className="text-center py-8 space-y-2">
+              <Calendar className="w-8 h-8 text-slate-600 mx-auto" />
+              <p className="text-sm text-slate-500">No scheduled deployments — click + New Deployment to add one</p>
+            </div>
+          )}
+          {schedules.map(item => (
+            <div key={item.id} className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <span className="font-mono text-sm font-semibold text-white">{item.site_name ?? item.site}</span>
+                  <p className="font-mono text-xs text-pantheon-yellow mt-0.5">{item.source} → {item.destination}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => cancelSchedule(item.id)} className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">✕</button>
+                </div>
+              </div>
+              <div className="font-mono text-xs text-slate-300 mt-1.5">
+                {new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                <span className="text-slate-500 ml-1">(Manila)</span>
+              </div>
+              {item.notes && <p className="font-mono text-xs text-slate-500 mt-0.5">{item.notes}</p>}
+            </div>
+          ))}
 
         </div>
       )}
@@ -1502,44 +1542,72 @@ export default function Page() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-slate-400" />
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Upcoming Deployments</h3>
+              <h3 className="text-sm font-semibold text-white uppercase tracking-widest">Upcoming Deployments</h3>
             </div>
             <button
               onClick={() => fetch('/api/schedule').then(r => r.json()).then(setSchedules).catch(() => {})}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+              className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Refresh
             </button>
           </div>
-          {schedules.length > 0 ? (
-            <ScheduleTable
-              schedules={schedules}
-              editingId={editingId}
-              editFor={editFor}
-              editNotes={editNotes}
-              editDest={editDest}
-              onEdit={(item) => {
-                setEditingId(item.id)
-                setEditFor(toManilaDatetimeLocal(item.scheduled_for))
-                setEditNotes(item.notes ?? '')
-                setEditDest(item.destination)
-              }}
-              onSave={saveEdit}
-              onCancelEdit={() => setEditingId(null)}
-              onRunNow={runScheduleNow}
-              onCancel={cancelSchedule}
-              setEditFor={setEditFor}
-              setEditNotes={setEditNotes}
-              setEditDest={setEditDest}
-            />
+          {schedules.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <Clock className="w-8 h-8 text-slate-600 mx-auto" />
+              <p className="text-sm text-slate-500">No upcoming deployments —{' '}
+                <button onClick={() => setTab('schedule')} className="text-pantheon-yellow hover:underline">schedule one</button>
+              </p>
+            </div>
           ) : (
-            <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
-              No upcoming deployments —{' '}
-              <button onClick={() => setTab('schedule')} className="text-pantheon-yellow hover:underline">
-                schedule one
-              </button>
-            </p>
+            schedules.map(item => {
+              const isEditing = editingId === item.id
+              return (
+                <div key={item.id} className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-sm font-semibold text-white">{item.site_name ?? item.site}</span>
+                        <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">{item.source} → {item.destination}</span>
+                      </div>
+                      {!isEditing && <p className="font-mono text-xs text-slate-300 mt-1">
+                        {new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        <span className="text-slate-500 ml-1">(Manila)</span>
+                      </p>}
+                      {item.notes && !isEditing && <p className="font-mono text-xs text-slate-500 mt-0.5">{item.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {!isEditing && <>
+                        <button onClick={() => runScheduleNow(item)} className="rounded border border-pantheon-yellow/40 px-2.5 py-1 text-xs text-pantheon-yellow hover:bg-pantheon-yellow/10 transition-colors">▶</button>
+                        <button onClick={() => { setEditingId(item.id); setEditFor(toManilaDatetimeLocal(item.scheduled_for)); setEditNotes(item.notes ?? ''); setEditDest(item.destination) }} className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-400 hover:border-slate-400 transition-colors">✎</button>
+                        <button onClick={() => cancelSchedule(item.id)} className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">✕</button>
+                      </>}
+                    </div>
+                  </div>
+                  {isEditing && (
+                    <div className="space-y-3 pt-2 border-t border-slate-700">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-400 font-mono">Date & Time (Manila)</label>
+                          <input type="datetime-local" value={editFor} onChange={e => setEditFor(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white focus:border-pantheon-yellow focus:outline-none" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-400 font-mono">Destination</label>
+                          <select value={editDest} onChange={e => setEditDest(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-pantheon-yellow focus:outline-none">
+                            {['dev','test','live'].map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Notes (optional)" className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white placeholder-slate-500 focus:border-pantheon-yellow focus:outline-none" />
+                      <div className="flex gap-2">
+                        <button onClick={() => saveEdit(item.id)} disabled={!editFor} className="flex-1 rounded-lg bg-pantheon-yellow py-2 text-xs font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 transition-colors">Save</button>
+                        <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       )}
@@ -1555,11 +1623,11 @@ export default function Page() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Deployment History</h3>
+                <h3 className="text-sm font-semibold text-white uppercase tracking-widest">Past Deployments</h3>
               </div>
               <button
                 onClick={() => fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+                className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Refresh
@@ -1593,21 +1661,40 @@ export default function Page() {
               </div>
             )}
 
-            {/* Past */}
-            <div className="space-y-3">
-              {hasLive && pastHistory.length > 0 && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-slate-400" />
-                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Past</h3>
-                  </div>
+            {/* Past — paginated 5 per page */}
+            {(() => {
+              const totalPages = Math.ceil(pastHistory.length / HISTORY_PAGE_SIZE)
+              const paginated  = pastHistory.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE)
+              return (
+                <div className="space-y-3">
+                  {hasLive && pastHistory.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-slate-400" />
+                      <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Past</h3>
+                    </div>
+                  )}
+                  {!hasLive && pastHistory.length === 0 && (
+                    <p className="text-sm text-slate-500 text-center py-12">No deployment history yet</p>
+                  )}
+                  {paginated.map(item => <HistoryCard key={item.id} item={item} onResume={resumePaused} />)}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 pt-2">
+                      <button
+                        onClick={() => setHistoryPage(p => Math.max(0, p - 1))}
+                        disabled={historyPage === 0}
+                        className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors"
+                      >← Prev</button>
+                      <span className="font-mono text-xs text-slate-500">{historyPage + 1} / {totalPages}</span>
+                      <button
+                        onClick={() => setHistoryPage(p => Math.min(totalPages - 1, p + 1))}
+                        disabled={historyPage >= totalPages - 1}
+                        className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors"
+                      >Next →</button>
+                    </div>
+                  )}
                 </div>
-              )}
-              {!hasLive && pastHistory.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-12">No deployment history yet</p>
-              )}
-              {pastHistory.map(item => <HistoryCard key={item.id} item={item} onResume={resumePaused} />)}
-            </div>
+              )
+            })()}
           </div>
         )
       })()}
