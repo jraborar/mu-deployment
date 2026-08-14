@@ -369,7 +369,7 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
 
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-1.5">
-      {/* Row 1: Site name + status */}
+      {/* Row 1: Site name + status + show details */}
       <div className="flex items-start justify-between gap-3">
         <div className="truncate">
           <span className={`font-mono text-sm font-semibold ${siteColor}`}>
@@ -379,7 +379,13 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
             <span className="ml-1.5 font-mono font-normal text-slate-500 text-xs">· {item.site}</span>
           )}
         </div>
-        <span className={`font-mono text-xs font-semibold shrink-0 ${siteColor}`}>{item.status}</span>
+        <div className="flex items-center gap-3 shrink-0">
+          <button onClick={toggle} className="flex items-center gap-1 font-mono text-xs text-white hover:text-pantheon-yellow transition-colors">
+            {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {open ? 'Hide details' : 'Show details'}
+          </button>
+          <span className={`font-mono text-xs font-semibold ${siteColor}`}>{item.status}</span>
+        </div>
       </div>
 
       {/* Row 2: Pipeline chips */}
@@ -413,12 +419,6 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
           ▶ Resume deployment
         </button>
       )}
-
-      {/* Expand toggle — subtle link with chevron (WP Staging style) */}
-      <button onClick={toggle} className="flex items-center gap-1 font-mono text-xs text-slate-500 hover:text-slate-300 transition-colors pt-0.5">
-        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        {open ? 'Hide details' : 'Show details'}
-      </button>
 
       {/* Expanded key log entries */}
       {open && (
