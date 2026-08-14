@@ -18,3 +18,4 @@ npm-debug.log*
 
 # local PR counter — tracked locally only, causes merge conflicts when in git
 .pr-counter
+tsconfig.tsbuildinfo
