@@ -643,6 +643,12 @@ export default function Page() {
   // WP Staging upcoming integration
   const [stagingUpcoming, setStagingUpcoming] = useState<StagingUpcomingItem[]>([])
   const [stagingLoading, setStagingLoading]   = useState(false)
+  const [stagingOpen, setStagingOpen]         = useState(false)
+  const [stagingPage, setStagingPage]         = useState(0)
+  const STAGING_PAGE_SIZE = 5
+  const [manualSchedOpen, setManualSchedOpen] = useState(false)
+  const [manualPage, setManualPage]           = useState(0)
+  const MANUAL_PAGE_SIZE = 5
 
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editFor, setEditFor]       = useState('')
@@ -1585,122 +1591,184 @@ export default function Page() {
               Refresh
             </button>
           </div>
-          {/* ── WP Staging upcoming section ── */}
+          {/* ── WP Staging upcoming section — accordion with pagination ── */}
           {(stagingLoading || stagingUpcoming.length > 0) && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+              {/* Accordion header */}
+              <button
+                onClick={() => setStagingOpen(o => !o)}
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-700/40 transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-pantheon-yellow animate-pulse inline-block" />
                   <h3 className="text-sm font-semibold text-white uppercase tracking-widest">From WP Staging</h3>
+                  {stagingUpcoming.length > 0 && (
+                    <span className="text-xs rounded-full bg-pantheon-yellow/20 text-pantheon-yellow px-2 py-0.5 font-mono">{stagingUpcoming.length}</span>
+                  )}
                 </div>
-                <button
-                  onClick={() => {
-                    setStagingLoading(true)
-                    fetch('/api/staging-upcoming').then(r => r.json()).then(d => { setStagingUpcoming(Array.isArray(d) ? d : []); setStagingLoading(false) }).catch(() => setStagingLoading(false))
-                  }}
-                  className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${stagingLoading ? 'animate-spin' : ''}`} />
-                  Refresh
-                </button>
-              </div>
-              {stagingLoading && stagingUpcoming.length === 0 && (
-                <p className="text-sm text-slate-500 font-mono text-center py-4">Loading from WP Staging…</p>
-              )}
-              {stagingUpcoming.map((item, i) => {
-                const stagingDate = new Date(item.at)
-                const fmtStaging  = stagingDate.toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={e => {
+                      e.stopPropagation()
+                      setStagingLoading(true)
+                      fetch('/api/staging-upcoming').then(r => r.json()).then(d => { setStagingUpcoming(Array.isArray(d) ? d : []); setStagingPage(0); setStagingLoading(false) }).catch(() => setStagingLoading(false))
+                    }}
+                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${stagingLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  {stagingOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                </div>
+              </button>
+
+              {/* Accordion body */}
+              {stagingOpen && (() => {
                 const cadenceLabel: Record<string, string> = { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', 'bimonthly-week-of-15': 'Bi-monthly', 'security-only': 'Security only' }
+                const totalPages = Math.ceil(stagingUpcoming.length / STAGING_PAGE_SIZE)
+                const paged = stagingUpcoming.slice(stagingPage * STAGING_PAGE_SIZE, (stagingPage + 1) * STAGING_PAGE_SIZE)
                 return (
-                  <div key={`${item.id}-${i}`} className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-                    <div className="flex items-center gap-3 px-5 py-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-sm text-white">{item.site_name ?? item.site}</span>
-                          {i === 0 && <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">next</span>}
+                  <div className="border-t border-slate-700">
+                    {stagingLoading && stagingUpcoming.length === 0 && (
+                      <p className="text-sm text-slate-500 font-mono text-center py-4">Loading from WP Staging…</p>
+                    )}
+                    {paged.map((item, i) => {
+                      const globalIdx = stagingPage * STAGING_PAGE_SIZE + i
+                      const fmtStaging = new Date(item.at).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                      return (
+                        <div key={`${item.id}-${globalIdx}`} className={`flex items-center gap-3 px-5 py-3 ${i < paged.length - 1 ? 'border-b border-slate-700/60' : ''}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-sm text-white">{item.site_name ?? item.site}</span>
+                              {globalIdx === 0 && <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">next</span>}
+                            </div>
+                            <p className="font-mono text-xs text-slate-400 mt-0.5">
+                              {fmtStaging} · {cadenceLabel[item.cadence] ?? item.cadence}
+                            </p>
+                            {(item.skip_upstream || item.skip_plugins_themes) && (
+                              <p className="font-mono text-xs text-slate-500 mt-0.5">
+                                {[item.skip_upstream && 'skip upstream', item.skip_plugins_themes && 'skip plugins/themes'].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                          </div>
+                          <button onClick={() => scheduleFromStaging(item)} className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors shrink-0">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Schedule
+                          </button>
                         </div>
-                        <p className="font-mono text-xs text-slate-400 mt-0.5">
-                          Staging: {fmtStaging} · {cadenceLabel[item.cadence] ?? item.cadence}
-                        </p>
-                        {(item.skip_upstream || item.skip_plugins_themes) && (
-                          <p className="font-mono text-xs text-slate-500 mt-0.5">
-                            {[item.skip_upstream && 'skip upstream', item.skip_plugins_themes && 'skip plugins/themes'].filter(Boolean).join(' · ')}
-                          </p>
-                        )}
+                      )
+                    })}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 px-5 py-2 border-t border-slate-700/60">
+                        <button onClick={() => setStagingPage(p => Math.max(0, p - 1))} disabled={stagingPage === 0} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">← Prev</button>
+                        <span className="font-mono text-xs text-slate-500">{stagingPage + 1} / {totalPages}</span>
+                        <button onClick={() => setStagingPage(p => Math.min(totalPages - 1, p + 1))} disabled={stagingPage >= totalPages - 1} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">Next →</button>
                       </div>
-                      <button
-                        onClick={() => scheduleFromStaging(item)}
-                        className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors shrink-0"
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        Schedule
-                      </button>
-                    </div>
+                    )}
                   </div>
                 )
-              })}
-              <div className="border-t border-slate-700/60 pt-1" />
+              })()}
             </div>
           )}
 
-          {/* ── Scheduled deployments ── */}
-          {schedules.length === 0 ? (
-            <div className="text-center py-8 space-y-2">
-              <Clock className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-sm text-slate-500">No upcoming deployments —{' '}
-                <button onClick={() => setTab('schedule')} className="text-pantheon-yellow hover:underline">schedule one</button>
-              </p>
-            </div>
-          ) : (
-            schedules.map(item => {
-              const isEditing = editingId === item.id
-              return (
-                <div key={item.id} className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-2">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-semibold text-white">{item.site_name ?? item.site}</span>
-                        <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">{item.source} → {item.destination}</span>
-                      </div>
-                      {!isEditing && <p className="font-mono text-xs text-slate-300 mt-1">
-                        {new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                        <span className="text-slate-500 ml-1">(Manila)</span>
-                      </p>}
-                      {item.notes && !isEditing && <p className="font-mono text-xs text-slate-500 mt-0.5">{item.notes}</p>}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {!isEditing && <>
-                        <button onClick={() => runScheduleNow(item)} className="rounded border border-pantheon-yellow/40 px-2.5 py-1 text-xs text-pantheon-yellow hover:bg-pantheon-yellow/10 transition-colors">▶</button>
-                        <button onClick={() => { setEditingId(item.id); setEditFor(toManilaDatetimeLocal(item.scheduled_for)); setEditNotes(item.notes ?? ''); setEditDest(item.destination) }} className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-400 hover:border-slate-400 transition-colors">✎</button>
-                        <button onClick={() => cancelSchedule(item.id)} className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">✕</button>
-                      </>}
-                    </div>
+          {/* ── Manually scheduled deployments — accordion ── */}
+          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            <button
+              onClick={() => setManualSchedOpen(o => !o)}
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-700/40 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-slate-400" />
+                <h3 className="text-sm font-semibold text-white uppercase tracking-widest">Manually Scheduled</h3>
+                {schedules.length > 0 && (
+                  <span className="text-xs rounded-full bg-slate-600 text-slate-300 px-2 py-0.5 font-mono">{schedules.length}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    fetch('/api/schedule').then(r => r.json()).then(data => { setSchedules(data); setManualPage(0) }).catch(() => {})
+                  }}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                {manualSchedOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </div>
+            </button>
+
+            {manualSchedOpen && (
+              <div className="border-t border-slate-700">
+                {schedules.length === 0 ? (
+                  <div className="text-center py-6 space-y-1">
+                    <p className="text-sm text-slate-500">No manually scheduled deployments —{' '}
+                      <button onClick={() => setTab('schedule')} className="text-pantheon-yellow hover:underline">schedule one</button>
+                    </p>
                   </div>
-                  {isEditing && (
-                    <div className="space-y-3 pt-2 border-t border-slate-700">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-400 font-mono">Date & Time (Manila)</label>
-                          <input type="datetime-local" value={editFor} onChange={e => setEditFor(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white focus:border-pantheon-yellow focus:outline-none" />
+                ) : (() => {
+                  const manualTotalPages = Math.ceil(schedules.length / MANUAL_PAGE_SIZE)
+                  const pagedSchedules = schedules.slice(manualPage * MANUAL_PAGE_SIZE, (manualPage + 1) * MANUAL_PAGE_SIZE)
+                  return (<>
+                  {pagedSchedules.map((item, i) => {
+                  const isEditing = editingId === item.id
+                  return (
+                    <div key={item.id} className={`p-4 space-y-2 ${i < schedules.length - 1 ? 'border-b border-slate-700/60' : ''}`}>
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-sm font-semibold text-white">{item.site_name ?? item.site}</span>
+                            <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">{item.source} → {item.destination}</span>
+                          </div>
+                          {!isEditing && <p className="font-mono text-xs text-slate-300 mt-1">
+                            {new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            <span className="text-slate-500 ml-1">(Manila)</span>
+                          </p>}
+                          {item.notes && !isEditing && <p className="font-mono text-xs text-slate-500 mt-0.5">{item.notes}</p>}
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs text-slate-400 font-mono">Destination</label>
-                          <select value={editDest} onChange={e => setEditDest(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-pantheon-yellow focus:outline-none">
-                            {['dev','test','live'].map(d => <option key={d} value={d}>{d}</option>)}
-                          </select>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {!isEditing && <>
+                            <button onClick={() => runScheduleNow(item)} className="rounded border border-pantheon-yellow/40 px-2.5 py-1 text-xs text-pantheon-yellow hover:bg-pantheon-yellow/10 transition-colors">▶</button>
+                            <button onClick={() => { setEditingId(item.id); setEditFor(toManilaDatetimeLocal(item.scheduled_for)); setEditNotes(item.notes ?? ''); setEditDest(item.destination) }} className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-400 hover:border-slate-400 transition-colors">✎</button>
+                            <button onClick={() => cancelSchedule(item.id)} className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">✕</button>
+                          </>}
                         </div>
                       </div>
-                      <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Notes (optional)" className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white placeholder-slate-500 focus:border-pantheon-yellow focus:outline-none" />
-                      <div className="flex gap-2">
-                        <button onClick={() => saveEdit(item.id)} disabled={!editFor} className="flex-1 rounded-lg bg-pantheon-yellow py-2 text-xs font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 transition-colors">Save</button>
-                        <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors">Cancel</button>
-                      </div>
+                      {isEditing && (
+                        <div className="space-y-3 pt-2 border-t border-slate-700">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-400 font-mono">Date & Time (Manila)</label>
+                              <input type="datetime-local" value={editFor} onChange={e => setEditFor(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white focus:border-pantheon-yellow focus:outline-none" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-400 font-mono">Destination</label>
+                              <select value={editDest} onChange={e => setEditDest(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-pantheon-yellow focus:outline-none">
+                                {['dev','test','live'].map(d => <option key={d} value={d}>{d}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Notes (optional)" className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white placeholder-slate-500 focus:border-pantheon-yellow focus:outline-none" />
+                          <div className="flex gap-2">
+                            <button onClick={() => saveEdit(item.id)} disabled={!editFor} className="flex-1 rounded-lg bg-pantheon-yellow py-2 text-xs font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 transition-colors">Save</button>
+                            <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                  {manualTotalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 px-5 py-2 border-t border-slate-700/60">
+                      <button onClick={() => setManualPage(p => Math.max(0, p - 1))} disabled={manualPage === 0} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">← Prev</button>
+                      <span className="font-mono text-xs text-slate-500">{manualPage + 1} / {manualTotalPages}</span>
+                      <button onClick={() => setManualPage(p => Math.min(manualTotalPages - 1, p + 1))} disabled={manualPage >= manualTotalPages - 1} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">Next →</button>
                     </div>
                   )}
-                </div>
-              )
-            })
-          )}
+                  </>)
+                })()}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
