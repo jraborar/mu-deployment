@@ -1271,18 +1271,25 @@ export default function Page() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-1 border-t border-slate-700">
+                <div className="pt-2 border-t border-slate-700 space-y-3">
                   <p className="text-xs text-slate-500 font-mono">
                     Pipeline: <span className="text-slate-300">{computeStages(source, destination).join(' → ') || '—'}</span>
                   </p>
-                  <button
-                    onClick={startDeployment}
-                    disabled={!site || !source}
-                    className="flex items-center gap-2 rounded-lg bg-pantheon-yellow px-5 py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Rocket className="w-4 h-4" />
-                    Start Deployment
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={startDeployment}
+                      disabled={!site || !source}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-pantheon-yellow py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Rocket className="w-4 h-4" />
+                      Start Deployment
+                    </button>
+                    {deployStatus === 'paused' && (
+                      <button onClick={reset} className="px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors">
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1290,7 +1297,7 @@ export default function Page() {
 
           {/* Pipeline bar */}
           {stages.length > 0 && (
-            <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card px-6 py-5">
+            <div className="rounded-xl border border-slate-700 bg-slate-800 px-6 py-5">
               <div className="mb-4 flex items-center justify-between">
                 <span className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
                   Pipeline
@@ -1299,7 +1306,7 @@ export default function Page() {
                   {!isTerminal && deployStatus !== 'idle' && (
                     <button
                       onClick={cancelDeployment}
-                      className="rounded border border-pantheon-error/50 px-3 py-1 font-mono text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
+                      className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
                     >
                       ✕ Stop
                     </button>
@@ -1307,7 +1314,7 @@ export default function Page() {
                   {isTerminal && (
                     <button
                       onClick={reset}
-                      className="rounded border border-pantheon-border px-3 py-1 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi transition-colors"
+                      className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
                     >
                       New Deployment
                     </button>
@@ -1349,8 +1356,8 @@ export default function Page() {
 
           {/* Log console */}
           {logs.length > 0 && (
-            <div className="rounded-xl border border-pantheon-border overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-pantheon-border bg-pantheon-bg-card px-4 py-2.5">
+            <div className="rounded-xl border border-slate-700 overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-slate-700 bg-slate-800 px-4 py-2.5">
                 <div className="flex gap-1.5">
                   <div className="h-3 w-3 rounded-full bg-pantheon-error/70" />
                   <div className="h-3 w-3 rounded-full bg-pantheon-warning/70" />
@@ -1373,7 +1380,7 @@ export default function Page() {
               </div>
               <div
                 ref={consoleRef}
-                className="console-output h-72 overflow-y-auto bg-pantheon-bg-console p-4 space-y-0.5"
+                className="console-output h-72 overflow-y-auto bg-slate-900 p-4 space-y-0.5"
               >
                 {logs.map((entry, i) => <LogLine key={i} entry={entry} />)}
                 {deployStatus === 'running' && (
@@ -1471,12 +1478,17 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1 border-t border-slate-700">
+            <div className="pt-2 border-t border-slate-700 space-y-3">
               <p className="text-xs text-slate-500 font-mono">Auto-triggered every minute by the scheduler</p>
-              <button onClick={submitSchedule} disabled={!schedSites.some(s => s.site && s.source) || !schedFor || schedLoading} className="flex items-center gap-2 rounded-lg bg-pantheon-yellow px-5 py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                <Calendar className="w-4 h-4" />
-                {schedLoading ? 'Saving...' : 'Schedule'}
-              </button>
+              <div className="flex gap-2">
+                <button onClick={submitSchedule} disabled={!schedSites.some(s => s.site && s.source) || !schedFor || schedLoading} className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-pantheon-yellow py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <Calendar className="w-4 h-4" />
+                  {schedLoading ? 'Saving…' : 'Schedule Deployment'}
+                </button>
+                <button onClick={() => { setSchedSites([{ site: '', source: '' }]); setSchedFor(''); setSchedNotes(''); setSchedConsultant('') }} className="px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors">
+                  Clear
+                </button>
+              </div>
             </div>
           </div>
           </div>
