@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Rocket } from 'lucide-react'
+import { Rocket, Calendar, Clock, History } from 'lucide-react'
 import { computeStages, parseMuSourceDate, addBusinessDays, toDatetimeLocal } from '@/lib/pipeline'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1401,14 +1401,21 @@ export default function Page() {
       {/* ── Schedule tab ────────────────────────────────────────────────────── */}
       {tab === 'schedule' && (
         <div className="space-y-6">
-          <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card p-6 space-y-5">
-            <h2 className="font-mono text-sm font-semibold text-pantheon-text">Schedule a Deployment</h2>
+          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-700">
+              <div className="flex items-center gap-2 mb-1">
+                <Calendar className="w-5 h-5 text-pantheon-yellow" />
+                <h2 className="text-white font-semibold">Schedule a Deployment</h2>
+              </div>
+              <p className="text-slate-400 text-sm">Auto-triggered by the scheduler at the specified Manila time</p>
+            </div>
+            <div className="px-6 py-5 space-y-5">
 
-            {/* Dynamic site rows */}
+            {/* Sites */}
             <div className="space-y-2">
               <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                <span className="font-mono text-xs text-pantheon-text-muted">Site ID</span>
-                <span className="font-mono text-xs text-pantheon-text-muted">Source</span>
+                <span className="text-xs text-slate-400 font-mono">Site ID</span>
+                <span className="text-xs text-slate-400 font-mono">Source</span>
                 <span />
               </div>
               {schedSites.map((row, i) => {
@@ -1416,121 +1423,62 @@ export default function Page() {
                 return (
                   <div key={i} className="space-y-1">
                     <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                      <input
-                        className={inputCls}
-                        placeholder="my-pantheon-site"
-                        value={row.site}
-                        onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, site: e.target.value } : s))}
-                      />
-                      <input
-                        className={inputCls}
-                        placeholder="autopilot or dev"
-                        value={row.source}
-                        onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, source: e.target.value } : s))}
-                      />
-                      <button
-                        onClick={() => setSchedSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev)}
-                        disabled={schedSites.length === 1}
-                        className="rounded border border-pantheon-border px-2 py-2 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-error/40 hover:text-pantheon-error disabled:opacity-30 transition-colors"
-                      >✕</button>
+                      <input className={inputCls} placeholder="my-pantheon-site" value={row.site} onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, site: e.target.value } : s))} />
+                      <input className={inputCls} placeholder="autopilot or dev" value={row.source} onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, source: e.target.value } : s))} />
+                      <button onClick={() => setSchedSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev)} disabled={schedSites.length === 1} className="rounded border border-slate-600 px-2 py-2 text-xs text-slate-400 hover:border-red-500/40 hover:text-red-400 disabled:opacity-30 transition-colors">✕</button>
                     </div>
-                    {isDuplicate && (
-                      <p className="font-mono text-xs text-pantheon-warning pl-1">
-                        ⚠ {row.site} already has a pending schedule — you can still proceed or defer the existing one.
-                      </p>
-                    )}
+                    {isDuplicate && <p className="text-xs text-pantheon-warning font-mono pl-1">⚠ {row.site} already has a pending schedule.</p>}
                   </div>
                 )
               })}
-              <button
-                onClick={() => setSchedSites(prev => [...prev, { site: '', source: '' }])}
-                className="font-mono text-xs text-pantheon-info hover:text-pantheon-text transition-colors"
-              >
+              <button onClick={() => setSchedSites(prev => [...prev, { site: '', source: '' }])} className="text-xs text-slate-400 hover:text-slate-200 transition-colors">
                 + Add another site
               </button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="font-mono text-xs text-pantheon-text-muted">Final Destination</label>
+
+            <div className="grid gap-4 sm:grid-cols-2 pt-1 border-t border-slate-700">
+              <div className="space-y-1.5 pt-1">
+                <label className="text-xs text-slate-400 font-mono">Final destination</label>
                 <div className="flex gap-2">
                   {DEST_OPTS.map(d => (
-                    <button
-                      key={d}
-                      onClick={() => setSchedDest(d)}
-                      className={[
-                        'rounded-lg border px-4 py-2 font-mono text-sm transition-colors',
-                        schedDest === d
-                          ? 'border-pantheon-yellow bg-pantheon-yellow/10 text-pantheon-yellow'
-                          : 'border-pantheon-border text-pantheon-text-muted hover:border-pantheon-border-hi',
-                      ].join(' ')}
-                    >
-                      {d}
-                    </button>
+                    <button key={d} onClick={() => setSchedDest(d)} className={['rounded-lg border px-4 py-2 text-sm transition-colors', schedDest === d ? 'border-pantheon-yellow bg-pantheon-yellow/10 text-pantheon-yellow font-medium' : 'border-slate-600 text-slate-400 hover:border-slate-500 hover:text-slate-200'].join(' ')}>{d}</button>
                   ))}
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 pt-1">
                 <div className="flex items-center gap-2">
-                  <label className="font-mono text-xs text-pantheon-text-muted">
-                    Deployment Date
-                  </label>
-                  {schedDateFetching && (
-                    <span className="font-mono text-xs text-pantheon-text-dim animate-pulse">
-                      looking up creation date...
-                    </span>
-                  )}
+                  <label className="text-xs text-slate-400 font-mono">Deployment date</label>
+                  {schedDateFetching && <span className="text-xs text-slate-500 animate-pulse">looking up...</span>}
                   {schedDefaultDate && schedCreatedDate && !schedDateFetching && (
-                    <span className="font-mono text-xs text-pantheon-text-dim">
-                      · default{' '}
-                      <span className="text-pantheon-info">
-                        {schedDefaultDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                      </span>
-                      {' '}(3 business days from{' '}
-                      <span className="text-pantheon-yellow">
-                        {schedCreatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
-                      )
-                    </span>
+                    <span className="text-xs text-slate-500">· default <span className="text-pantheon-info">{schedDefaultDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span></span>
                   )}
                 </div>
-                <input
-                  type="datetime-local"
-                  className={inputCls}
-                  value={schedFor}
-                  onChange={e => {
-                    schedForEdited.current = true
-                    setSchedFor(e.target.value)
-                  }}
-                />
+                <input type="datetime-local" className={inputCls} value={schedFor} onChange={e => { schedForEdited.current = true; setSchedFor(e.target.value) }} />
                 {schedDefaultDate && schedCreatedDate && schedFor !== getManilaDefaultFor(schedDefaultDate) && schedFor && (
-                  <p className="font-mono text-xs text-pantheon-warning">
-                    ⚠ Overriding default — original: {schedDefaultDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                  </p>
+                  <p className="text-xs text-pantheon-warning font-mono">⚠ Overriding default</p>
                 )}
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="font-mono text-xs text-pantheon-text-muted">MU Consultant</label>
+
+            <div className="grid gap-4 sm:grid-cols-2 pt-1 border-t border-slate-700">
+              <div className="space-y-1.5 pt-1">
+                <label className="text-xs text-slate-400 font-mono">MU Consultant</label>
                 <input className={inputCls} placeholder="e.g. Jasper" value={schedConsultant} onChange={e => setSchedConsultant(e.target.value)} />
               </div>
-              <div className="space-y-1.5">
-                <label className="font-mono text-xs text-pantheon-text-muted">Notes (optional)</label>
+              <div className="space-y-1.5 pt-1">
+                <label className="text-xs text-slate-400 font-mono">Notes (optional)</label>
                 <input className={inputCls} placeholder="e.g. Sprint 12 release" value={schedNotes} onChange={e => setSchedNotes(e.target.value)} />
               </div>
             </div>
-            <div className="flex items-center justify-between pt-1">
-              <p className="font-mono text-xs text-pantheon-text-dim">
-                Locally: auto-triggered every minute. Production: schedule a <span className="text-pantheon-yellow">POST /api/cron/trigger</span> call from any cron service.
-              </p>
-              <button
-                onClick={submitSchedule}
-                disabled={!schedSites.some(s => s.site && s.source) || !schedFor || schedLoading}
-                className="rounded-lg bg-pantheon-yellow px-5 py-2.5 font-mono text-sm font-semibold text-black hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {schedLoading ? 'Saving...' : '+ Schedule'}
+
+            <div className="flex items-center justify-between pt-1 border-t border-slate-700">
+              <p className="text-xs text-slate-500 font-mono">Auto-triggered every minute by the scheduler</p>
+              <button onClick={submitSchedule} disabled={!schedSites.some(s => s.site && s.source) || !schedFor || schedLoading} className="flex items-center gap-2 rounded-lg bg-pantheon-yellow px-5 py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <Calendar className="w-4 h-4" />
+                {schedLoading ? 'Saving...' : 'Schedule'}
               </button>
             </div>
+          </div>
           </div>
 
         </div>
@@ -1539,6 +1487,10 @@ export default function Page() {
       {/* ── Upcoming tab ─────────────────────────────────────────────────────── */}
       {tab === 'upcoming' && (
         <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-pantheon-yellow" />
+            <h2 className="text-white font-semibold">Upcoming Deployments</h2>
+          </div>
           {schedules.length > 0 ? (
             <ScheduleTable
               schedules={schedules}
@@ -1574,17 +1526,21 @@ export default function Page() {
       {/* ── History tab ─────────────────────────────────────────────────────── */}
       {tab === 'history' && (() => {
         const inMemoryIds    = new Set(runningJobs.map(j => j.id))
-        // Supabase records marked running but not tracked in this server's memory
         const orphanedRunning = history.filter(item => item.status === 'running' && !inMemoryIds.has(item.id))
         const pastHistory     = history.filter(item => item.status !== 'running')
         const hasLive         = runningJobs.length > 0 || orphanedRunning.length > 0
         return (
           <div className="space-y-6">
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-pantheon-yellow" />
+              <h2 className="text-white font-semibold">Deployment History</h2>
+            </div>
             {/* Live — in-memory jobs + orphaned Supabase running records */}
             {hasLive && (
               <div className="space-y-3">
-                <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-yellow">
-                  ● Live
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-pantheon-yellow flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-pantheon-yellow animate-pulse inline-block" />
+                  Live
                 </h2>
                 {runningJobs.map(job => {
                   const liveStages = jobStages[job.id]
@@ -1610,15 +1566,10 @@ export default function Page() {
             {/* Past */}
             <div className="space-y-3">
               {hasLive && pastHistory.length > 0 && (
-                <h2 className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
-                  Past
-                </h2>
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Past</h2>
               )}
               {!hasLive && pastHistory.length === 0 && (
-                <p className="font-mono text-sm text-pantheon-text-dim text-center py-8">
-                  No deployment history
-                  {!process.env.NEXT_PUBLIC_SUPABASE_URL && ' — configure Supabase to enable history'}
-                </p>
+                <p className="text-sm text-slate-500 text-center py-12">No deployment history yet</p>
               )}
               {pastHistory.map(item => <HistoryCard key={item.id} item={item} onResume={resumePaused} />)}
             </div>
