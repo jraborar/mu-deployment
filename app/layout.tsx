@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Toaster } from 'sonner'
-import { createClient } from '@/utils/supabase/server'
-import { logout } from '@/app/auth/actions'
+import UserMenu from '@/app/components/UserMenu'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -9,10 +8,7 @@ export const metadata: Metadata = {
   description: 'Deploy and schedule Pantheon site deployments across environments',
 }
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-pantheon-bg text-pantheon-text antialiased">
@@ -30,19 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <span className="text-pantheon-text-muted font-mono text-sm tracking-wide">
               MU Deployment
             </span>
-            {user && (
-              <div className="ml-auto flex items-center gap-4">
-                <span className="font-mono text-xs text-pantheon-text-dim">{user.email}</span>
-                <form action={logout}>
-                  <button
-                    type="submit"
-                    className="rounded border border-pantheon-border px-3 py-1 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi hover:text-pantheon-text transition-colors"
-                  >
-                    Sign out
-                  </button>
-                </form>
-              </div>
-            )}
+            <UserMenu />
           </div>
         </header>
 
