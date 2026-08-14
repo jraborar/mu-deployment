@@ -1199,7 +1199,7 @@ export default function Page() {
               <div className="px-6 py-5 border-b border-slate-700">
                 <div className="flex items-center gap-2 mb-1">
                   <Rocket className="w-5 h-5 text-pantheon-yellow" />
-                  <h2 className="text-white font-semibold">New Deployment</h2>
+                  <h2 className="text-white font-semibold">Run Deployment</h2>
                 </div>
                 <p className="text-slate-400 text-sm">Deploy a multidev through the pipeline with per-stage approval gates</p>
               </div>
@@ -1542,11 +1542,11 @@ export default function Page() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-slate-400" />
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Upcoming Deployments</h3>
+              <h3 className="text-sm font-semibold text-white uppercase tracking-widest">Upcoming Deployments</h3>
             </div>
             <button
               onClick={() => fetch('/api/schedule').then(r => r.json()).then(setSchedules).catch(() => {})}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+              className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Refresh
@@ -1623,11 +1623,11 @@ export default function Page() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Deployment History</h3>
+                <h3 className="text-sm font-semibold text-white uppercase tracking-widest">Past Deployments</h3>
               </div>
               <button
                 onClick={() => fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})}
-                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+                className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Refresh
