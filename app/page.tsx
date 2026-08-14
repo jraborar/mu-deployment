@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Rocket, Calendar, Clock, History, ChevronUp, ChevronDown } from 'lucide-react'
+import { Rocket, Calendar, Clock, History, ChevronUp, ChevronDown, RefreshCw, Layers } from 'lucide-react'
 import { computeStages, parseMuSourceDate, addBusinessDays, toDatetimeLocal } from '@/lib/pipeline'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1401,13 +1401,20 @@ export default function Page() {
       {/* ── Schedule tab ────────────────────────────────────────────────────── */}
       {tab === 'schedule' && (
         <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">New Deployment</h3>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-700">
               <div className="flex items-center gap-2 mb-1">
-                <Calendar className="w-5 h-5 text-pantheon-yellow" />
-                <h2 className="text-white font-semibold">Schedule a Deployment</h2>
+                <Calendar className="w-5 h-5 text-slate-400" />
+                <h2 className="text-slate-400 font-semibold uppercase tracking-widest text-sm">Schedule a Deployment</h2>
               </div>
-              <p className="text-slate-400 text-sm">Auto-triggered by the scheduler at the specified Manila time</p>
+              <p className="text-slate-500 text-sm">Auto-triggered by the scheduler at the specified Manila time</p>
             </div>
             <div className="px-6 py-5 space-y-5">
 
@@ -1492,9 +1499,18 @@ export default function Page() {
       {/* ── Upcoming tab ─────────────────────────────────────────────────────── */}
       {tab === 'upcoming' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-pantheon-yellow" />
-            <h2 className="text-white font-semibold">Upcoming Deployments</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Upcoming Deployments</h3>
+            </div>
+            <button
+              onClick={() => fetch('/api/schedule').then(r => r.json()).then(setSchedules).catch(() => {})}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh
+            </button>
           </div>
           {schedules.length > 0 ? (
             <ScheduleTable
@@ -1536,17 +1552,26 @@ export default function Page() {
         const hasLive         = runningJobs.length > 0 || orphanedRunning.length > 0
         return (
           <div className="space-y-6">
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-pantheon-yellow" />
-              <h2 className="text-white font-semibold">Deployment History</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-slate-400" />
+                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Deployment History</h3>
+              </div>
+              <button
+                onClick={() => fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})}
+                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Refresh
+              </button>
             </div>
             {/* Live — in-memory jobs + orphaned Supabase running records */}
             {hasLive && (
               <div className="space-y-3">
-                <h2 className="text-xs font-semibold uppercase tracking-widest text-pantheon-yellow flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-pantheon-yellow animate-pulse inline-block" />
+                <h3 className="text-sm font-semibold text-yellow-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse inline-block" />
                   Live
-                </h2>
+                </h3>
                 {runningJobs.map(job => {
                   const liveStages = jobStages[job.id]
                   const siteName   = job.site_name ?? schedules.find(s => s.site === job.site)?.site_name ?? job.site
@@ -1571,7 +1596,12 @@ export default function Page() {
             {/* Past */}
             <div className="space-y-3">
               {hasLive && pastHistory.length > 0 && (
-                <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Past</h2>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-slate-400" />
+                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Past</h3>
+                  </div>
+                </div>
               )}
               {!hasLive && pastHistory.length === 0 && (
                 <p className="text-sm text-slate-500 text-center py-12">No deployment history yet</p>
