@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Toaster } from 'sonner'
+import { Rocket } from 'lucide-react'
 import UserMenu from '@/app/components/UserMenu'
 import './globals.css'
 
@@ -13,19 +14,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="min-h-screen text-pantheon-text antialiased">
         <header className="border-b border-slate-700/60 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-10">
-          <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 py-4">
-            <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-lg bg-pantheon-yellow flex items-center justify-center shadow-lg">
-                <span className="text-slate-900 font-bold text-xs tracking-tight">P</span>
+          <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-pantheon-yellow flex items-center justify-center shrink-0 shadow-lg">
+                <Rocket className="w-5 h-5 text-slate-900" />
               </div>
-              <span className="font-semibold text-sm tracking-widest uppercase text-slate-200">
-                Pantheon
-              </span>
+              <div>
+                <h1 className="text-base font-bold text-white leading-tight">MU Deployment</h1>
+                <p className="text-slate-400 text-xs">Automated Pantheon pipeline deployments</p>
+              </div>
             </div>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400 text-sm tracking-wide">
-              MU Deployment
-            </span>
             <UserMenu />
           </div>
         </header>
