@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Rocket, Calendar, Clock, History } from 'lucide-react'
+import { Rocket, Calendar, Clock, History, ChevronUp, ChevronDown } from 'lucide-react'
 import { computeStages, parseMuSourceDate, addBusinessDays, toDatetimeLocal } from '@/lib/pipeline'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -333,24 +333,20 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
   const [loading, setLoading] = useState(false)
 
   const statusColors: Record<string, string> = {
-    completed: 'text-pantheon-success',
-    failed:    'text-pantheon-error',
-    paused:    'text-pantheon-warning',
-    cancelled: 'text-pantheon-text-muted',
-    running:   'text-pantheon-info animate-pulse',
+    completed: 'text-green-400',
+    failed:    'text-red-400',
+    paused:    'text-orange-400',
+    cancelled: 'text-slate-500',
+    running:   'text-yellow-400',
   }
-  const borderColors: Record<string, string> = {
-    completed: 'border-pantheon-success/30',
-    failed:    'border-pantheon-error/30',
-    paused:    'border-pantheon-warning/30',
-    cancelled: 'border-pantheon-border',
-    running:   'border-pantheon-info/30',
-  }
-  const siteColor   = statusColors[item.status] ?? 'text-pantheon-text-muted'
-  const borderColor = borderColors[item.status] ?? 'border-pantheon-border'
-  const endLabel    = item.status === 'failed' ? 'Failed:' : item.status === 'paused' ? 'Paused:' : item.status === 'cancelled' ? 'Cancelled:' : 'Completed:'
+  const siteColor = statusColors[item.status] ?? 'text-slate-400'
+  const endLabel  = item.status === 'failed' ? 'Failed:' : item.status === 'paused' ? 'Paused:' : item.status === 'cancelled' ? 'Cancelled:' : 'Completed:'
+
   const fmt = (ts: string) =>
-    new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    new Date(ts).toLocaleString('en-US', {
+      timeZone: 'Asia/Manila', month: 'short', day: 'numeric',
+      year: 'numeric', hour: 'numeric', minute: '2-digit',
+    })
   const dur = (s: string, e: string) => {
     const m = Math.round((new Date(e).getTime() - new Date(s).getTime()) / 60000)
     return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`
@@ -363,95 +359,81 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
       setLoading(true)
       try {
         const res = await fetch(`/api/deployments/${item.id}`)
-        if (res.ok) {
-          const data = await res.json()
-          setLogs((data.logs as LogEntry[]) ?? [])
-        }
+        if (res.ok) { const data = await res.json(); setLogs((data.logs as LogEntry[]) ?? []) }
       } catch {}
       setLoading(false)
     }
   }
 
-  const keyLogs = logs
-    ? logs.filter(l => ['error', 'warn', 'success'].includes(l.logType)).slice(-5)
-    : []
+  const keyLogs = logs ? logs.filter(l => ['error', 'warn', 'success'].includes(l.logType)).slice(-5) : []
 
   return (
-    <div className={`rounded-lg border ${borderColor} bg-pantheon-bg-elevated overflow-hidden`}>
-      {/* Header */}
-      <button onClick={toggle} className="w-full flex items-center justify-between p-4 text-left hover:bg-pantheon-bg-card/50 transition-colors">
-        <div className="min-w-0 space-y-0.5">
-          <div className="truncate">
-            {item.site_name ? (
-              <span className={`font-mono text-sm font-semibold ${siteColor}`}>
-                {item.site_name}
-                <span className="ml-1.5 font-normal text-pantheon-text-dim text-xs">· {item.site}</span>
-              </span>
-            ) : (
-              <span className={`font-mono text-sm font-semibold ${siteColor}`}>{item.site}</span>
-            )}
-          </div>
-          <div className="font-mono text-xs">
-            <span className="text-pantheon-yellow">{item.source}</span>
-            <span className="mx-1.5 text-pantheon-text-dim">→</span>
-            <span className="text-pantheon-info">{item.destination}</span>
-            {item.stages_completed.length > 0 && (
-              <span className="ml-2 text-pantheon-text-dim">({item.stages_completed.join(' → ')})</span>
-            )}
-          </div>
+    <div className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-1.5">
+      {/* Row 1: Site name + status */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="truncate">
+          <span className={`font-mono text-sm font-semibold ${siteColor}`}>
+            {item.site_name ?? item.site}
+          </span>
+          {item.site_name && (
+            <span className="ml-1.5 font-mono font-normal text-slate-500 text-xs">· {item.site}</span>
+          )}
         </div>
-        <div className="flex items-center gap-3 shrink-0 ml-3">
-          <div className="text-right space-y-0.5">
-            <div className={`font-mono text-xs font-semibold ${siteColor}`}>{item.status}</div>
-            {item.completed_at && (
-              <div className="font-mono text-xs text-pantheon-text-dim">{dur(item.started_at, item.completed_at)}</div>
-            )}
-          </div>
-          <span className="font-mono text-xs text-pantheon-text-dim">{open ? '▲' : '▼'}</span>
-        </div>
+        <span className={`font-mono text-xs font-semibold shrink-0 ${siteColor}`}>{item.status}</span>
+      </div>
+
+      {/* Row 2: Pipeline chips */}
+      <div className="font-mono text-xs flex items-center flex-wrap gap-x-2 gap-y-0.5">
+        <span className="text-pantheon-yellow">{item.source}</span>
+        <span className="text-slate-600">→</span>
+        <span className="text-slate-300">{item.destination}</span>
+        {item.stages_completed.length > 0 && (
+          <>
+            <span className="text-slate-600">·</span>
+            <span className="text-green-400">{item.stages_completed.join(' → ')} ✓</span>
+          </>
+        )}
+        {item.completed_at && (
+          <>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-500">{dur(item.started_at, item.completed_at)}</span>
+          </>
+        )}
+      </div>
+
+      {/* Row 3: Timestamps */}
+      <div className="flex flex-wrap gap-x-4 font-mono text-xs text-slate-400">
+        <span>Started: {fmt(item.started_at)}</span>
+        <span>{endLabel} {item.completed_at ? fmt(item.completed_at) : '—'}</span>
+      </div>
+
+      {/* Resume button */}
+      {item.status === 'paused' && onResume && (
+        <button onClick={() => onResume(item)} className="flex items-center gap-1 font-mono text-xs text-orange-400 hover:text-orange-300 transition-colors pt-0.5">
+          ▶ Resume deployment
+        </button>
+      )}
+
+      {/* Expand toggle — subtle link with chevron (WP Staging style) */}
+      <button onClick={toggle} className="flex items-center gap-1 font-mono text-xs text-slate-500 hover:text-slate-300 transition-colors pt-0.5">
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {open ? 'Hide details' : 'Show details'}
       </button>
 
-      {/* Expanded detail */}
+      {/* Expanded key log entries */}
       {open && (
-        <div className="border-t border-pantheon-border px-4 pb-4 pt-3 space-y-3">
-          {/* Timestamps */}
-          <div className={`flex flex-wrap gap-x-4 font-mono text-xs ${siteColor}`}>
-            <span>Started: {fmt(item.started_at)}</span>
-            <span>{endLabel} {item.completed_at ? fmt(item.completed_at) : '—'}</span>
-          </div>
-
-          {/* Resume button for paused */}
-          {item.status === 'paused' && onResume && (
-            <button
-              onClick={() => onResume(item)}
-              className="rounded border border-pantheon-warning/40 px-3 py-1 font-mono text-xs text-pantheon-warning hover:bg-pantheon-warning/10 transition-colors"
-            >
-              ▶ Resume deployment
-            </button>
-          )}
-
-          {/* Key log entries */}
-          {loading && <p className="font-mono text-xs text-pantheon-text-dim">Loading details...</p>}
-          {logs !== null && keyLogs.length > 0 && (
-            <div className="space-y-1">
-              <p className="font-mono text-xs text-pantheon-text-muted uppercase tracking-widest">Key events</p>
-              <div className="bg-pantheon-bg-console rounded p-3 space-y-0.5">
-                {keyLogs.map((entry, i) => {
-                  const style = LOG_STYLES[entry.logType] ?? LOG_STYLES.info
-                  return (
-                    <div key={i} className={`font-mono text-xs ${style.cls}`}>
-                      <span className="opacity-50 mr-1.5">{style.prefix}</span>{entry.message}
-                    </div>
-                  )
-                })}
+        <div className="border-t border-slate-700 pt-3 space-y-1.5">
+          {loading && <p className="font-mono text-xs text-slate-500">Loading…</p>}
+          {logs !== null && keyLogs.length > 0 && keyLogs.map((entry, i) => {
+            const style = LOG_STYLES[entry.logType] ?? LOG_STYLES.info
+            return (
+              <div key={i} className={`font-mono text-xs ${style.cls}`}>
+                <span className="opacity-50 mr-1.5">{style.prefix}</span>{entry.message}
               </div>
-            </div>
-          )}
-          {logs !== null && logs.length > 0 && keyLogs.length === 0 && (
-            <p className="font-mono text-xs text-pantheon-text-dim">No key events recorded.</p>
-          )}
-          {logs !== null && logs.length === 0 && (
-            <p className="font-mono text-xs text-pantheon-text-dim">No logs stored for this deployment.</p>
+            )
+          })}
+          {logs !== null && keyLogs.length === 0 && (
+            <p className="font-mono text-xs text-slate-500">No key events recorded.</p>
           )}
         </div>
       )}
@@ -1157,6 +1139,17 @@ export default function Page() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Page header — matches WP Staging pattern: large icon + title + subtitle before tabs */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-pantheon-yellow flex items-center justify-center shrink-0">
+          <Rocket className="w-5 h-5 text-slate-900" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-white">MU Deployment</h1>
+          <p className="text-slate-400 text-sm">Automated Pantheon pipeline deployments</p>
+        </div>
+      </div>
+
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-slate-700">
         {TABS.map(t => (
