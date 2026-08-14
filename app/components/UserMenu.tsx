@@ -5,27 +5,28 @@ import { logout } from '@/app/auth/actions'
 
 export default function UserMenu() {
   const [email, setEmail] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !key) return
-
-    import('@/utils/supabase/client')
-      .then(({ createClient }) => createClient().auth.getUser())
-      .then(({ data }) => setEmail(data.user?.email ?? null))
-      .catch(() => {})
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(({ email }) => { setEmail(email); setLoaded(true) })
+      .catch(() => setLoaded(true))
   }, [])
 
-  if (!email) return null
+  // Always show logout once we know the user is authenticated
+  // (proxy ensures only authenticated users reach this component)
+  if (!loaded) return null
 
   return (
     <div className="ml-auto flex items-center gap-4">
-      <span className="font-mono text-xs text-pantheon-text-dim">{email}</span>
+      {email && (
+        <span className="font-mono text-xs text-slate-400 hidden sm:block">{email}</span>
+      )}
       <form action={logout}>
         <button
           type="submit"
-          className="rounded border border-pantheon-border px-3 py-1 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi hover:text-pantheon-text transition-colors"
+          className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
         >
           Sign out
         </button>
