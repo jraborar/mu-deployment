@@ -1,7 +1,6 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 
 export async function login(formData: FormData) {
@@ -55,11 +54,13 @@ export async function logout() {
 }
 
 export async function signInWithOAuth(provider: 'github' | 'google') {
-  const supabase  = await createClient()
-  const headersList = await headers()
-  const host     = headersList.get('x-forwarded-host') || headersList.get('host') || ''
-  const protocol = host.startsWith('localhost') ? 'http' : 'https'
-  const origin   = `${protocol}://${host}`
+  const supabase = await createClient()
+  // RAILWAY_PUBLIC_DOMAIN is a runtime env var always set by Railway —
+  // never baked at build time, always the correct public hostname.
+  const domain = process.env.RAILWAY_PUBLIC_DOMAIN
+  const origin = domain
+    ? `https://${domain}`
+    : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
