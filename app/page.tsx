@@ -1155,26 +1155,18 @@ export default function Page() {
   const DEST_OPTS = ['dev', 'test', 'live'] as const
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Page title */}
-      <div>
-        <h1 className="font-mono text-2xl font-bold text-pantheon-text">Deployment Console</h1>
-        <p className="mt-1 font-mono text-sm text-pantheon-text-muted">
-          Deploy Pantheon multidevs through the pipeline with per-stage approval gates
-        </p>
-      </div>
-
+    <div className="space-y-6 animate-fade-in">
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-pantheon-border">
+      <div className="flex gap-1 border-b border-slate-700">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={[
-              'px-4 py-2 font-mono text-sm transition-colors',
+              'relative px-4 py-2 text-sm font-medium transition-colors',
               tab === t.key
                 ? 'border-b-2 border-pantheon-yellow text-pantheon-yellow'
-                : 'text-pantheon-text-muted hover:text-pantheon-text',
+                : 'text-slate-400 hover:text-slate-200',
             ].join(' ')}
           >
             {t.label}
