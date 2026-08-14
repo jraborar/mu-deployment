@@ -55,10 +55,13 @@ export async function logout() {
 
 export async function signInWithOAuth(provider: 'github' | 'google') {
   const supabase = await createClient()
+  // APP_URL (non-public) is a runtime env var — not baked at build time like
+  // NEXT_PUBLIC_APP_URL, so it always has the correct production value.
+  const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || ''
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      redirectTo: `${appUrl}/auth/callback`,
     },
   })
   if (error) return { error: error.message }
