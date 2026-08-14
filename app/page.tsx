@@ -647,6 +647,8 @@ export default function Page() {
   const [stagingPage, setStagingPage]         = useState(0)
   const STAGING_PAGE_SIZE = 5
   const [manualSchedOpen, setManualSchedOpen] = useState(false)
+  const [manualPage, setManualPage]           = useState(0)
+  const MANUAL_PAGE_SIZE = 5
 
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editFor, setEditFor]       = useState('')
@@ -1681,7 +1683,18 @@ export default function Page() {
                   <span className="text-xs rounded-full bg-slate-600 text-slate-300 px-2 py-0.5 font-mono">{schedules.length}</span>
                 )}
               </div>
-              {manualSchedOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    fetch('/api/schedule').then(r => r.json()).then(data => { setSchedules(data); setManualPage(0) }).catch(() => {})
+                  }}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-pantheon-yellow transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                {manualSchedOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </div>
             </button>
 
             {manualSchedOpen && (
@@ -1692,7 +1705,11 @@ export default function Page() {
                       <button onClick={() => setTab('schedule')} className="text-pantheon-yellow hover:underline">schedule one</button>
                     </p>
                   </div>
-                ) : schedules.map((item, i) => {
+                ) : (() => {
+                  const manualTotalPages = Math.ceil(schedules.length / MANUAL_PAGE_SIZE)
+                  const pagedSchedules = schedules.slice(manualPage * MANUAL_PAGE_SIZE, (manualPage + 1) * MANUAL_PAGE_SIZE)
+                  return (<>
+                  {pagedSchedules.map((item, i) => {
                   const isEditing = editingId === item.id
                   return (
                     <div key={item.id} className={`p-4 space-y-2 ${i < schedules.length - 1 ? 'border-b border-slate-700/60' : ''}`}>
@@ -1740,6 +1757,15 @@ export default function Page() {
                     </div>
                   )
                 })}
+                  {manualTotalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 px-5 py-2 border-t border-slate-700/60">
+                      <button onClick={() => setManualPage(p => Math.max(0, p - 1))} disabled={manualPage === 0} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">← Prev</button>
+                      <span className="font-mono text-xs text-slate-500">{manualPage + 1} / {manualTotalPages}</span>
+                      <button onClick={() => setManualPage(p => Math.min(manualTotalPages - 1, p + 1))} disabled={manualPage >= manualTotalPages - 1} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">Next →</button>
+                    </div>
+                  )}
+                  </>)
+                })()}
               </div>
             )}
           </div>
