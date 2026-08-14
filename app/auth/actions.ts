@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 
 export async function login(formData: FormData) {
@@ -54,14 +55,15 @@ export async function logout() {
 }
 
 export async function signInWithOAuth(provider: 'github' | 'google') {
-  const supabase = await createClient()
-  // APP_URL (non-public) is a runtime env var — not baked at build time like
-  // NEXT_PUBLIC_APP_URL, so it always has the correct production value.
-  const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || ''
+  const supabase  = await createClient()
+  const headersList = await headers()
+  const host     = headersList.get('x-forwarded-host') || headersList.get('host') || ''
+  const protocol = host.startsWith('localhost') ? 'http' : 'https'
+  const origin   = `${protocol}://${host}`
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo: `${appUrl}/auth/callback`,
+      redirectTo: `${origin}/auth/callback`,
     },
   })
   if (error) return { error: error.message }
