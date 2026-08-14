@@ -379,7 +379,7 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
 
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-1.5">
-      {/* Row 1: Site name + status + show details */}
+      {/* Row 1: Site name + status */}
       <div className="flex items-start justify-between gap-3">
         <div className="truncate">
           <span className={`font-mono text-sm font-semibold ${siteColor}`}>
@@ -389,13 +389,7 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
             <span className="ml-1.5 font-mono font-normal text-slate-500 text-xs">· {item.site}</span>
           )}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button onClick={toggle} className="flex items-center gap-1 font-mono text-xs text-white hover:text-pantheon-yellow transition-colors">
-            {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            {open ? 'Hide details' : 'Show details'}
-          </button>
-          <span className={`font-mono text-xs font-semibold ${siteColor}`}>{item.status}</span>
-        </div>
+        <span className={`font-mono text-xs font-semibold shrink-0 ${siteColor}`}>{item.status}</span>
       </div>
 
       {/* Row 2: Pipeline chips */}
@@ -425,7 +419,7 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
 
       {/* Resume button */}
       {item.status === 'paused' && onResume && (
-        <button onClick={() => onResume(item)} className="flex items-center gap-1 font-mono text-xs text-orange-400 hover:text-orange-300 transition-colors pt-0.5">
+        <button onClick={() => onResume(item)} className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors">
           ▶ Resume deployment
         </button>
       )}
@@ -447,6 +441,14 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
           )}
         </div>
       )}
+
+      {/* Show Details — bottom-right */}
+      <div className="flex justify-end pt-0.5">
+        <button onClick={toggle} className="flex items-center gap-1 text-xs text-white hover:text-pantheon-yellow transition-colors">
+          {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          {open ? 'Hide Details' : 'Show Details'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -554,7 +556,7 @@ function RunningJobCard({
                 </button>
                 <button
                   onClick={onReject}
-                  className="rounded-lg border border-pantheon-border px-4 py-1.5 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi hover:text-pantheon-text transition-colors"
+                  className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-4 py-1.5 text-xs font-semibold text-slate-900 hover:text-pantheon-text transition-colors"
                 >
                   {approval.rejectLabel ?? '✕ Reject'}
                 </button>
@@ -1225,7 +1227,7 @@ export default function Page() {
                 <button onClick={reconnect} className="rounded-lg bg-pantheon-yellow px-4 py-1.5 font-mono text-xs font-semibold text-black hover:bg-pantheon-yellow-dark">
                   Reconnect
                 </button>
-                <button onClick={reset} className="rounded-lg border border-pantheon-border px-4 py-1.5 font-mono text-xs text-pantheon-text-muted hover:border-pantheon-border-hi">
+                <button onClick={reset} className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-4 py-1.5 text-xs font-semibold text-slate-900">
                   Dismiss
                 </button>
               </div>
@@ -1727,7 +1729,7 @@ export default function Page() {
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {!isEditing && <>
-                            <button onClick={() => runScheduleNow(item)} className="rounded border border-pantheon-yellow/40 px-2.5 py-1 text-xs text-pantheon-yellow hover:bg-pantheon-yellow/10 transition-colors">▶</button>
+                            <button onClick={() => runScheduleNow(item)} className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-2.5 py-1.5 text-xs font-semibold text-slate-900 transition-colors">▶</button>
                             <button onClick={() => { setEditingId(item.id); setEditFor(toManilaDatetimeLocal(item.scheduled_for)); setEditNotes(item.notes ?? ''); setEditDest(item.destination) }} className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-400 hover:border-slate-400 transition-colors">✎</button>
                             <button onClick={() => cancelSchedule(item.id)} className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">✕</button>
                           </>}
