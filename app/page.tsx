@@ -54,6 +54,16 @@ interface HistoryItem {
   completed_at: string | null
 }
 
+interface StagingUpcomingItem {
+  id: string
+  site: string
+  site_name?: string
+  cadence: string
+  at: string
+  skip_upstream: boolean
+  skip_plugins_themes: boolean
+}
+
 // ── Log styling ────────────────────────────────────────────────────────────────
 
 const LOG_STYLES: Record<string, { prefix: string; cls: string }> = {
@@ -630,6 +640,10 @@ export default function Page() {
   const [historyPage, setHistoryPage]  = useState(0)
   const HISTORY_PAGE_SIZE = 5
 
+  // WP Staging upcoming integration
+  const [stagingUpcoming, setStagingUpcoming] = useState<StagingUpcomingItem[]>([])
+  const [stagingLoading, setStagingLoading]   = useState(false)
+
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editFor, setEditFor]       = useState('')
   const [editNotes, setEditNotes]   = useState('')
@@ -776,10 +790,17 @@ export default function Page() {
     fetch('/api/cron/trigger').catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch schedules and history when tabs open
+  // Fetch schedules, staging upcoming, and history when tabs open
   useEffect(() => {
     if (tab === 'schedule' || tab === 'upcoming') {
       fetch('/api/schedule').then(r => r.json()).then(setSchedules).catch(() => {})
+    }
+    if (tab === 'upcoming') {
+      setStagingLoading(true)
+      fetch('/api/staging-upcoming')
+        .then(r => r.json())
+        .then(data => { setStagingUpcoming(Array.isArray(data) ? data : []); setStagingLoading(false) })
+        .catch(() => setStagingLoading(false))
     }
     if (tab === 'history') {
       fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
@@ -1095,6 +1116,19 @@ export default function Page() {
     setEditingId(null)
     const updated = await fetch('/api/schedule').then(r => r.json())
     setSchedules(updated)
+  }
+
+  const scheduleFromStaging = (item: StagingUpcomingItem) => {
+    // Pre-fill the schedule form with the site and default source
+    // Source will be mu-YYMMDD format — WP Staging creates this multidev
+    const today = new Date()
+    const yy = String(today.getFullYear()).slice(2)
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    setSchedSites([{ site: item.site, source: `mu-${yy}${mm}${dd}` }])
+    setSchedDest('live')
+    setShowSchedForm(true)
+    setTab('schedule')
   }
 
   const runScheduleNow = (item: ScheduleItem) => {
@@ -1551,6 +1585,65 @@ export default function Page() {
               Refresh
             </button>
           </div>
+          {/* ── WP Staging upcoming section ── */}
+          {(stagingLoading || stagingUpcoming.length > 0) && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-pantheon-yellow animate-pulse inline-block" />
+                  <h3 className="text-sm font-semibold text-white uppercase tracking-widest">From WP Staging</h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setStagingLoading(true)
+                    fetch('/api/staging-upcoming').then(r => r.json()).then(d => { setStagingUpcoming(Array.isArray(d) ? d : []); setStagingLoading(false) }).catch(() => setStagingLoading(false))
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${stagingLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+              {stagingLoading && stagingUpcoming.length === 0 && (
+                <p className="text-sm text-slate-500 font-mono text-center py-4">Loading from WP Staging…</p>
+              )}
+              {stagingUpcoming.map((item, i) => {
+                const stagingDate = new Date(item.at)
+                const fmtStaging  = stagingDate.toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                const cadenceLabel: Record<string, string> = { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', 'bimonthly-week-of-15': 'Bi-monthly', 'security-only': 'Security only' }
+                return (
+                  <div key={`${item.id}-${i}`} className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+                    <div className="flex items-center gap-3 px-5 py-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm text-white">{item.site_name ?? item.site}</span>
+                          {i === 0 && <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">next</span>}
+                        </div>
+                        <p className="font-mono text-xs text-slate-400 mt-0.5">
+                          Staging: {fmtStaging} · {cadenceLabel[item.cadence] ?? item.cadence}
+                        </p>
+                        {(item.skip_upstream || item.skip_plugins_themes) && (
+                          <p className="font-mono text-xs text-slate-500 mt-0.5">
+                            {[item.skip_upstream && 'skip upstream', item.skip_plugins_themes && 'skip plugins/themes'].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => scheduleFromStaging(item)}
+                        className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors shrink-0"
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                        Schedule
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="border-t border-slate-700/60 pt-1" />
+            </div>
+          )}
+
+          {/* ── Scheduled deployments ── */}
           {schedules.length === 0 ? (
             <div className="text-center py-8 space-y-2">
               <Clock className="w-8 h-8 text-slate-600 mx-auto" />
