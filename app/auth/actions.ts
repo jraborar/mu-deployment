@@ -62,5 +62,7 @@ export async function signInWithOAuth(provider: 'github' | 'google') {
     },
   })
   if (error) return { error: error.message }
-  if (data.url) redirect(data.url)
+  // Return the URL — let the client redirect so NEXT_REDIRECT isn't
+  // thrown inside an onClick handler, which Next.js 16 doesn't handle.
+  return { url: data.url }
 }
