@@ -7,12 +7,13 @@ const PUBLIC_PATHS = [
   '/forgot-password',
   '/reset-password',
   '/auth',
+  '/api/',   // API routes handle their own auth or are internal-only
 ]
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public auth routes through without session check
+  // Allow public paths and all API routes through without session check
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
     return NextResponse.next()
   }
