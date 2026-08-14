@@ -1,17 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/utils/supabase/client'
 import { logout } from '@/app/auth/actions'
 
 export default function UserMenu() {
   const [email, setEmail] = useState<string | null>(null)
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null)
-    })
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) return
+
+    import('@/utils/supabase/client')
+      .then(({ createClient }) => createClient().auth.getUser())
+      .then(({ data }) => setEmail(data.user?.email ?? null))
+      .catch(() => {})
   }, [])
 
   if (!email) return null
