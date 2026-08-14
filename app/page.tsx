@@ -1415,7 +1415,7 @@ export default function Page() {
               className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors"
             >
               <Calendar className="w-3.5 h-3.5" />
-              {showSchedForm ? 'Cancel' : '+ New Deployment'}
+              {showSchedForm ? 'Cancel' : '+ Add Schedule'}
             </button>
           </div>
 
@@ -1511,25 +1511,24 @@ export default function Page() {
           {schedules.length === 0 && !showSchedForm && (
             <div className="text-center py-8 space-y-2">
               <Calendar className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-sm text-slate-500">No scheduled deployments — click + New Deployment to add one</p>
+              <p className="text-sm text-slate-500">No scheduled deployments — click + Add Schedule to add one</p>
             </div>
           )}
           {schedules.map(item => (
-            <div key={item.id} className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-              <div className="flex items-start gap-3">
+            <div key={item.id} className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3">
                 <div className="flex-1 min-w-0">
-                  <span className="font-mono text-sm font-semibold text-white">{item.site_name ?? item.site}</span>
-                  <p className="font-mono text-xs text-pantheon-yellow mt-0.5">{item.source} → {item.destination}</p>
+                  <span className="font-mono text-sm text-white">{item.site_name ?? item.site}</span>
+                  <p className="font-mono text-xs text-slate-400 mt-0.5">{item.source} → {item.destination}</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => cancelSchedule(item.id)} className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">✕</button>
+                <div className="hidden sm:flex flex-col items-end text-xs text-slate-500">
+                  <span className="text-slate-300">{new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                  {item.notes && <span>{item.notes}</span>}
                 </div>
+                <button onClick={() => cancelSchedule(item.id)} className="text-red-500 hover:text-red-400 transition-colors ml-1" title="Remove schedule">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
               </div>
-              <div className="font-mono text-xs text-slate-300 mt-1.5">
-                {new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                <span className="text-slate-500 ml-1">(Manila)</span>
-              </div>
-              {item.notes && <p className="font-mono text-xs text-slate-500 mt-0.5">{item.notes}</p>}
             </div>
           ))}
 
