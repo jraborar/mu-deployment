@@ -3,51 +3,51 @@
 @import "tailwindcss";
 
 @theme {
-  /* Pantheon brand colors */
-  --color-pantheon-yellow:      #EFD01B;
-  --color-pantheon-yellow-dark: #C9AE00;
-  --color-pantheon-bg:          #0C0C0C;
-  --color-pantheon-bg-card:     #141414;
-  --color-pantheon-bg-elevated: #1C1C1C;
-  --color-pantheon-bg-console:  #0A0A0A;
-  --color-pantheon-border:      #272727;
-  --color-pantheon-border-hi:   #383838;
+  /* Pantheon brand colors — matched to mu-wp-staging palette */
+  --color-pantheon-yellow:      #FFDC28;
+  --color-pantheon-yellow-dark: #E6C625;
+  --color-pantheon-bg:          #0F172A;   /* slate-900 */
+  --color-pantheon-bg-card:     #1E293B;   /* slate-800 */
+  --color-pantheon-bg-elevated: #334155;   /* slate-700 */
+  --color-pantheon-bg-console:  #0F172A;
+  --color-pantheon-border:      #334155;   /* slate-700 */
+  --color-pantheon-border-hi:   #475569;   /* slate-600 */
   --color-pantheon-purple:      #6633CC;
   --color-pantheon-purple-dim:  #4B249A;
-  --color-pantheon-text:        #E8E8E8;
-  --color-pantheon-text-muted:  #7A7A7A;
-  --color-pantheon-text-dim:    #4A4A4A;
-  --color-pantheon-success:     #22C55E;
-  --color-pantheon-success-dim: #15803D;
-  --color-pantheon-error:       #EF4444;
-  --color-pantheon-error-dim:   #991B1B;
-  --color-pantheon-warning:     #F97316;
-  --color-pantheon-info:        #60A5FA;
+  --color-pantheon-text:        #F1F5F9;   /* slate-100 */
+  --color-pantheon-text-muted:  #94A3B8;   /* slate-400 */
+  --color-pantheon-text-dim:    #64748B;   /* slate-500 */
+  --color-pantheon-success:     #4ADE80;   /* green-400 */
+  --color-pantheon-success-dim: #16A34A;   /* green-600 */
+  --color-pantheon-error:       #F87171;   /* red-400 */
+  --color-pantheon-error-dim:   #DC2626;   /* red-600 */
+  --color-pantheon-warning:     #FB923C;   /* orange-400 */
+  --color-pantheon-info:        #60A5FA;   /* blue-400 */
 
-  /* Shadcn/ui-compatible semantic tokens (used by auth components) */
-  --color-background:       #0C0C0C;
-  --color-foreground:       #E8E8E8;
-  --color-card:             #141414;
-  --color-card-foreground:  #E8E8E8;
-  --color-primary:          #EFD01B;
-  --color-primary-foreground: #0C0C0C;
-  --color-secondary:        #1A1A1A;
-  --color-secondary-foreground: #E8E8E8;
-  --color-muted:            #1A1A1A;
-  --color-muted-foreground: #6B6B6B;
-  --color-accent:           #2A2A2A;
-  --color-accent-foreground: #E8E8E8;
-  --color-destructive:      #EF4444;
-  --color-border:           #2A2A2A;
-  --color-input:            #1A1A1A;
-  --color-ring:             #EFD01B;
+  /* Shadcn/ui-compatible semantic tokens */
+  --color-background:           #0F172A;
+  --color-foreground:           #F1F5F9;
+  --color-card:                 #1E293B;
+  --color-card-foreground:      #F1F5F9;
+  --color-primary:              #FFDC28;
+  --color-primary-foreground:   #0F172A;
+  --color-secondary:            #334155;
+  --color-secondary-foreground: #F1F5F9;
+  --color-muted:                #1E293B;
+  --color-muted-foreground:     #94A3B8;
+  --color-accent:               #334155;
+  --color-accent-foreground:    #F1F5F9;
+  --color-destructive:          #F87171;
+  --color-border:               #334155;
+  --color-input:                #1E293B;
+  --color-ring:                 #FFDC28;
 
-  /* Fonts — JetBrains Mono for both */
-  --font-sans: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  /* Fonts — system sans for body, JetBrains Mono for code */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
 
   /* Border radius */
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 
   /* Animations */
   --animate-blink:    blink 1s step-end infinite;
@@ -75,15 +75,16 @@
 * { box-sizing: border-box; }
 
 body {
-  background-color: #0C0C0C;
-  color: #E8E8E8;
-  font-family: var(--font-mono);
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
+  min-height: 100vh;
+  color: #F1F5F9;
+  font-family: var(--font-sans);
   margin: 0;
 }
 
 ::-webkit-scrollbar       { width: 6px; height: 6px; }
-::-webkit-scrollbar-track  { background: #141414; }
-::-webkit-scrollbar-thumb  { background: #2A2A2A; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #383838; }
+::-webkit-scrollbar-track  { background: #1E293B; }
+::-webkit-scrollbar-thumb  { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-.console-output ::selection { background: rgba(239, 208, 27, 0.25); }
+.console-output ::selection { background: rgba(255, 220, 40, 0.25); }
