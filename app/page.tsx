@@ -1,14 +1,288 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Rocket, Calendar, Clock, History, ChevronUp, ChevronDown, RefreshCw, Layers } from 'lucide-react'
+import { Rocket, Calendar, Clock, History, ChevronUp, ChevronDown, RefreshCw, Layers, Globe, Plus, Trash2 } from 'lucide-react'
 import { computeStages, parseMuSourceDate, addBusinessDays, toDatetimeLocal } from '@/lib/pipeline'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type DeployStatus = 'idle' | 'running' | 'awaiting-approval' | 'paused' | 'completed' | 'failed'
 type ApprovalType = 'alignment' | 'stage'
-type Tab = 'deploy' | 'schedule' | 'upcoming' | 'history'
+type Tab = 'sites' | 'deploy' | 'schedule' | 'upcoming' | 'history'
+
+type Platform = 'wp-single' | 'wp-multisite' | 'drupal'
+
+interface Site {
+  site: string
+  site_name?: string | null
+  platform: Platform
+  parent_site?: string | null
+  php_version?: string | null
+  upstream?: string | null
+  skip_upstream: boolean
+  skip_plugins_themes: boolean
+  deploy_days: number
+  deploy_destination: 'dev' | 'test' | 'live' | 'multidev'
+  vrt_paths: string[]
+  active: boolean
+  notes?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+const MAX_VRT_PATHS = 70
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  'wp-single':    'WordPress',
+  'wp-multisite': 'WP Multisite',
+  'drupal':       'Drupal',
+}
+
+interface SiteFormState {
+  site: string
+  platform: Platform
+  deploy_destination: 'dev' | 'test' | 'live' | 'multidev'
+  deploy_days: number
+  skip_upstream: boolean
+  skip_plugins_themes: boolean
+  vrt_paths_text: string
+  notes: string
+}
+
+const emptySiteForm: SiteFormState = {
+  site: '', platform: 'wp-single', deploy_destination: 'live', deploy_days: 1,
+  skip_upstream: false, skip_plugins_themes: false, vrt_paths_text: '', notes: '',
+}
+
+function SitesTab() {
+  const [sites, setSites]     = useState<Site[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<string | null>(null) // site machine-name, or '__new__'
+  const [form, setForm]       = useState<SiteFormState>(emptySiteForm)
+  const [saving, setSaving]   = useState(false)
+  const [busy, setBusy]       = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
+
+  const inputCls = 'w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-white placeholder-slate-500 focus:border-pantheon-yellow focus:outline-none'
+  const labelCls = 'text-xs text-slate-400 font-mono'
+
+  const loadSites = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/sites')
+      if (res.ok) setSites(await res.json())
+    } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { void loadSites() }, [loadSites])
+
+  const vrtPaths = form.vrt_paths_text.split('\n').map(p => p.trim()).filter(Boolean)
+  const vrtOver  = vrtPaths.length > MAX_VRT_PATHS
+
+  const openNew  = () => { setForm(emptySiteForm); setEditing('__new__'); setError(null) }
+  const openEdit = (s: Site) => {
+    setForm({
+      site: s.site, platform: s.platform, deploy_destination: s.deploy_destination,
+      deploy_days: s.deploy_days, skip_upstream: s.skip_upstream,
+      skip_plugins_themes: s.skip_plugins_themes,
+      vrt_paths_text: (s.vrt_paths ?? []).join('\n'), notes: s.notes ?? '',
+    })
+    setEditing(s.site); setError(null)
+  }
+
+  const save = async () => {
+    if (!form.site.trim() || vrtOver) return
+    setSaving(true); setError(null)
+    try {
+      const payload = {
+        site: form.site.trim(), platform: form.platform,
+        deploy_destination: form.deploy_destination, deploy_days: form.deploy_days,
+        skip_upstream: form.skip_upstream, skip_plugins_themes: form.skip_plugins_themes,
+        vrt_paths: vrtPaths, notes: form.notes.trim() || null,
+      }
+      const isNew = editing === '__new__'
+      const res = await fetch(isNew ? '/api/sites' : `/api/sites/${encodeURIComponent(form.site)}`, {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) { setError((await res.json().catch(() => ({}))).error ?? `Failed (HTTP ${res.status})`); return }
+      setEditing(null); await loadSites()
+    } finally { setSaving(false) }
+  }
+
+  const toggleActive = async (s: Site) => {
+    setBusy(s.site)
+    try {
+      await fetch(`/api/sites/${encodeURIComponent(s.site)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !s.active }),
+      })
+      await loadSites()
+    } finally { setBusy(null) }
+  }
+
+  const reSync = async (s: Site) => {
+    setBusy(s.site)
+    try {
+      await fetch('/api/sites', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site: s.site }),
+      })
+      await loadSites()
+    } finally { setBusy(null) }
+  }
+
+  const remove = async (s: Site) => {
+    setBusy(s.site)
+    try {
+      await fetch(`/api/sites/${encodeURIComponent(s.site)}`, { method: 'DELETE' })
+      await loadSites()
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Globe className="w-4 h-4 text-slate-400" />
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Sites Registry</h3>
+        </div>
+        <button onClick={openNew}
+          className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:opacity-90 px-3 py-1.5 text-xs font-semibold text-slate-900 transition-opacity">
+          <Plus className="w-3.5 h-3.5" />
+          Register Site
+        </button>
+      </div>
+
+      <p className="text-xs text-slate-500">Shared with WP Staging — register or edit here or there, same data.</p>
+
+      {editing && (
+        <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-visible">
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-700">
+            <Globe className="w-5 h-5 text-pantheon-yellow" />
+            <div>
+              <h4 className="text-sm font-semibold text-white">{editing === '__new__' ? 'Register Site' : `Edit ${form.site}`}</h4>
+              {editing === '__new__' && <p className="text-xs text-slate-400">Name, PHP version &amp; upstream are auto-resolved from Pantheon.</p>}
+            </div>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            {editing === '__new__' && (
+              <div className="space-y-1.5">
+                <label className={labelCls}>Site ID <span className="text-slate-600 normal-case">(Pantheon machine name)</span></label>
+                <input type="text" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
+                  placeholder="my-site-name" className={inputCls} />
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className={labelCls}>Platform</label>
+                <select value={form.platform} onChange={e => setForm(f => ({ ...f, platform: e.target.value as Platform }))} className={inputCls}>
+                  {(Object.keys(PLATFORM_LABELS) as Platform[]).map(p => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>Deploy to</label>
+                <select value={form.deploy_destination} onChange={e => setForm(f => ({ ...f, deploy_destination: e.target.value as SiteFormState['deploy_destination'] }))} className={inputCls}>
+                  <option value="live">Live</option>
+                  <option value="test">Test</option>
+                  <option value="dev">Dev</option>
+                  <option value="multidev">Multidev (no deploy)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={labelCls}>Deploy after (business days)</label>
+              <select value={form.deploy_days} onChange={e => setForm(f => ({ ...f, deploy_days: Number(e.target.value) }))} className={inputCls}>
+                <option value={1}>1 business day</option>
+                <option value={2}>2 business days</option>
+                <option value={3}>3 business days</option>
+                <option value={5}>5 business days (1 week)</option>
+              </select>
+            </div>
+
+            <div className="space-y-2 pt-1 border-t border-slate-700">
+              <p className="text-xs text-slate-400 font-mono pt-1">Update defaults</p>
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={form.skip_upstream} onChange={e => setForm(f => ({ ...f, skip_upstream: e.target.checked }))}
+                  className="rounded border-slate-600 bg-slate-700 accent-pantheon-yellow" />
+                Skip upstream updates
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={form.skip_plugins_themes} onChange={e => setForm(f => ({ ...f, skip_plugins_themes: e.target.checked }))}
+                  className="rounded border-slate-600 bg-slate-700 accent-pantheon-yellow" />
+                Skip plugins &amp; themes
+              </label>
+            </div>
+
+            <div className="space-y-1.5 pt-1 border-t border-slate-700">
+              <label className={labelCls}>VRT paths <span className="text-slate-600 normal-case">(one relative URL per line)</span></label>
+              <textarea value={form.vrt_paths_text} onChange={e => setForm(f => ({ ...f, vrt_paths_text: e.target.value }))}
+                rows={6} placeholder={'/\n/about\n/blog'} className={`${inputCls} resize-y`} />
+              <p className={`text-xs ${vrtOver ? 'text-red-400' : 'text-slate-500'}`}>{vrtPaths.length} / {MAX_VRT_PATHS} paths{vrtOver ? ' — over the limit' : ''}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={labelCls}>Notes <span className="text-slate-600 normal-case">(optional)</span></label>
+              <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="anything worth noting" className={inputCls} />
+            </div>
+
+            {error && <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 font-mono text-xs text-red-400">{error}</div>}
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={save} disabled={saving || !form.site.trim() || vrtOver}
+                className="flex-1 rounded-lg bg-pantheon-yellow hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-slate-900 transition-opacity disabled:opacity-40">
+                {saving ? 'Saving…' : editing === '__new__' ? 'Register Site' : 'Save Changes'}
+              </button>
+              <button onClick={() => setEditing(null)} className="px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && sites.length === 0 && <p className="text-sm text-slate-500 font-mono text-center py-6">Loading…</p>}
+      {!loading && sites.length === 0 && (
+        <div className="text-center py-8 space-y-2">
+          <Globe className="w-8 h-8 text-slate-600 mx-auto" />
+          <p className="text-sm text-slate-500">No sites registered yet — add one above</p>
+        </div>
+      )}
+
+      {sites.map((s) => (
+        <div key={s.site} className={`rounded-xl border bg-slate-800 overflow-hidden ${s.active ? 'border-slate-700' : 'border-slate-700/50 opacity-60'}`}>
+          <div className="flex items-center gap-3 px-5 py-3">
+            <div className="flex-1 min-w-0">
+              <span className="font-mono text-sm text-white">{s.site_name ?? s.site}</span>
+              {s.site_name && <span className="ml-2 text-xs text-slate-500 font-mono">{s.site}</span>}
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-300">{PLATFORM_LABELS[s.platform]}</span>
+                {s.php_version && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">PHP {s.php_version}</span>}
+                {s.upstream && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.upstream}</span>}
+                <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">→ {s.deploy_destination} · +{s.deploy_days}bd</span>
+                {(s.vrt_paths?.length ?? 0) > 0 && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.vrt_paths.length} VRT</span>}
+              </div>
+            </div>
+            <button onClick={() => reSync(s)} disabled={busy === s.site}
+              className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40" title="Re-sync from Pantheon">
+              <RefreshCw className={`w-4 h-4 ${busy === s.site ? 'animate-spin' : ''}`} />
+            </button>
+            <button onClick={() => openEdit(s)} className="text-xs text-slate-400 hover:text-white transition-colors">Edit</button>
+            <button onClick={() => toggleActive(s)} disabled={busy === s.site}
+              className={`text-xs px-2 py-0.5 rounded border transition-colors ${s.active ? 'border-green-700 text-green-400 hover:bg-green-900/30' : 'border-slate-600 text-slate-500 hover:bg-slate-700'}`}>
+              {s.active ? 'Active' : 'Paused'}
+            </button>
+            <button onClick={() => remove(s)} disabled={busy === s.site}
+              className="text-red-500 hover:text-red-400 transition-colors disabled:opacity-40" title="Remove from registry">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 interface LogEntry {
   type: 'log'
@@ -1174,6 +1448,7 @@ export default function Page() {
   }
 
   const TABS: { key: Tab; label: string }[] = [
+    { key: 'sites',    label: 'Sites' },
     { key: 'deploy',   label: 'Deploy' },
     { key: 'schedule', label: 'Schedule' },
     { key: 'upcoming', label: 'Upcoming' },
@@ -1212,6 +1487,9 @@ export default function Page() {
           </button>
         ))}
       </div>
+
+      {/* ── Sites tab ─────────────────────────────────────────────────────────── */}
+      {tab === 'sites' && <SitesTab />}
 
       {/* ── Deploy tab ──────────────────────────────────────────────────────── */}
       {tab === 'deploy' && (
