@@ -34,6 +34,7 @@ export interface ScheduleRecord {
   scheduled_for: string
   notes?: string
   consultant?: string
+  anchor_advance?: boolean   // true only for managed staging-cycle deploys → advances sites.last_deployment
 }
 
 export async function createDeploymentRecord(id: string, data: Omit<DeploymentRecord, 'completed_at' | 'logs' | 'stages_completed'>): Promise<void> {

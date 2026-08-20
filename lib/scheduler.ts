@@ -69,6 +69,7 @@ export async function runDueSchedules(): Promise<{ triggered: number; skipped: n
       destination: schedule.destination,
       stages,
       autoApprove,
+      anchorAdvance: schedule.anchor_advance === true,
     })
 
     void executeJob(job)

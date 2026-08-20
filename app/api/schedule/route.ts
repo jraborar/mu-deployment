@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
 
-  const { site, source, destination, scheduled_for, notes, consultant } = body
+  const { site, source, destination, scheduled_for, notes, consultant, anchor_advance } = body
   if (!site || !source || !destination || !scheduled_for) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 })
   }
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   }
 
   const site_name = await resolveSiteName(site)
-  await createSchedule({ site, site_name, source, destination, scheduled_for, notes, consultant })
+  await createSchedule({ site, site_name, source, destination, scheduled_for, notes, consultant, anchor_advance: anchor_advance === true })
   void broadcastMessage(
     buildScheduledBlocks(source, destination, site_name ?? site, scheduled_for, notes),
     `Deployment scheduled: ${source} → ${destination} on ${site_name ?? site}`,
