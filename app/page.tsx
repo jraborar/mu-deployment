@@ -1107,8 +1107,12 @@ export default function Page() {
       setRunningJobs([])
       return
     }
-    const poll = () =>
+    const poll = () => {
       fetch('/api/jobs').then(r => r.json()).then(setRunningJobs).catch(() => {})
+      // Also refresh the History list so an in-progress deploy's row/pills update
+      // live (previously only re-fetched on tab-open + completion → stale until reload).
+      fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})
+    }
     poll()
     const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
