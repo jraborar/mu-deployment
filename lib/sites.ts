@@ -47,6 +47,7 @@ export interface Site {
   vrt_threshold: number
   vrt_paths: string[]
   active: boolean
+  auto_stage?: boolean               // opt-in auto-staging gate (owned by mu-wp-staging; here for parity)
   notes?: string | null
   last_deployment?: string | null   // cadence anchor (written here on a managed-cycle deploy)
   created_at?: string
@@ -142,6 +143,7 @@ export async function registerSite(input: Partial<Site> & { site: string }): Pro
                            ? cleanVrtPaths(input.vrt_paths)
                            : existing?.vrt_paths ?? [],
     active:              input.active              ?? existing?.active              ?? true,
+    auto_stage:          input.auto_stage          ?? existing?.auto_stage          ?? false,
     notes:               input.notes               ?? existing?.notes               ?? null,
   }
 
@@ -157,7 +159,7 @@ export async function updateSite(site: string, patch: Partial<Site>): Promise<Si
     'site_name', 'site_uuid', 'platform', 'parent_site', 'php_version', 'upstream',
     'update_mode', 'skip_upstream', 'skip_plugins_themes',
     'deploy_days', 'deploy_destination', 'deploy_approval', 'security_deploy_hours',
-    'vrt_enabled', 'vrt_threshold', 'vrt_paths', 'active', 'notes', 'last_deployment',
+    'vrt_enabled', 'vrt_threshold', 'vrt_paths', 'active', 'auto_stage', 'notes', 'last_deployment',
   ]
   const updates: Record<string, unknown> = {}
   for (const k of allowed) if (k in patch && patch[k] !== undefined) updates[k] = patch[k]
