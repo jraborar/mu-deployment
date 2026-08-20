@@ -2,6 +2,7 @@ import { type Job, type LogEntry } from '@/lib/jobStore'
 import { run, runStream, getLatestCommitHash } from '@/lib/terminus'
 import { findByPrefix } from '@/lib/pipeline'
 import { createDeploymentRecord, finalizeDeploymentRecord, updateDeploymentSiteName } from '@/lib/supabase'
+import { updateSite } from '@/lib/sites'
 import { getPacificYYMMDD } from '@/lib/timezone'
 import {
   broadcastMessage,
@@ -484,6 +485,13 @@ export async function executeJob(job: Job): Promise<void> {
       stages_completed: job.completedStages, status: 'completed',
       completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel !== job.site ? siteLabel : undefined,
     })
+
+    // Advance the staging cadence anchor — ONLY for managed staging-cycle deploys
+    // (anchor_advance was stamped by mu-staging's prebook; false for fast-track,
+    // absent for manual/ad-hoc deploys). Best-effort; never blocks the deploy.
+    if (job.anchorAdvance) {
+      await updateSite(job.site, { last_deployment: new Date().toISOString() }).catch(() => {})
+    }
   } catch (err) {
     const isCancelled = err instanceof CancelledError
     const isPaused    = err instanceof PauseError

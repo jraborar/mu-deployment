@@ -19,6 +19,7 @@ export interface Job {
   currentStage: string | null
   status: 'running' | 'completed' | 'failed' | 'awaiting-approval' | 'paused'
   autoApprove: boolean
+  anchorAdvance: boolean   // advance sites.last_deployment on success (managed-cycle deploy only)
   cancelRequested: boolean
   label: string
   logs: LogEntry[]
@@ -46,6 +47,7 @@ export function createJob(params: {
   destination: string
   stages: string[]
   autoApprove?: boolean
+  anchorAdvance?: boolean
   label?: string
 }): Job {
   if (store.size >= MAX_JOBS) {
@@ -64,6 +66,7 @@ export function createJob(params: {
     currentStage: null,
     status: 'running',
     autoApprove: params.autoApprove ?? false,
+    anchorAdvance: params.anchorAdvance ?? false,
     cancelRequested: false,
     label: params.label ?? params.source,
     logs: [],
