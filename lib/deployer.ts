@@ -286,64 +286,52 @@ export async function executeJob(job: Job): Promise<void> {
       }
     }
 
-    // 6. Pending pipeline checks — offer to deploy gaps or pause
+    // 6. Pipeline alignment WARNINGS.
+    //
+    // These exist to catch code already sitting in the pipeline that this deploy
+    // would sweep along with it. They must never deploy anything themselves.
+    //
+    // They used to offer "Deploy test→live now" and run `env:deploy` right here —
+    // before the stage loop below, which is where the snapshot is taken and where
+    // the approval gate lives. So a test→live job hit LIVE with no snapshot and no
+    // gate. Worse, it fired on every such job by design: "test has code not yet in
+    // live" is exactly what a test→live deploy is FOR.
+    //
+    // So a gap is only worth mentioning when this job will pass THROUGH that
+    // environment on its way somewhere else — then its existing code really does
+    // get carried along. A gap at the job's own entry point is just the work.
     checkCancelled(job)
-    if (job.stages.includes('test')) {
+    const entryStage = job.stages[0] ?? null
+
+    if (job.stages.includes('test') && entryStage !== 'test') {
       const devHash = await getLatestCommitHash(job.site, 'dev')
       const testLog = await run(`terminus env:code-log ${job.site}.test --field=hash 2>/dev/null`, job)
       if (devHash && !testLog.stdout.includes(devHash)) {
-        log('warn', 'dev has commits not yet deployed to test — prompting')
-        const shouldDeploy = await prompt(
+        log('warn', 'dev has commits not yet deployed to test — they will be carried along by this deploy')
+        const proceed = await prompt(
           'alignment',
-          `Dev has code not yet deployed to test on \`${siteLabel}\`. Deploy dev→test now before proceeding, or pause?`,
-          'Deploy dev→test',
+          `Dev has code not yet deployed to test on \`${siteLabel}\`. This deploy will carry it along. Continue, or pause?`,
+          'Continue',
           'Pause',
-          `Dev has undeployed code on ${siteLabel}`,
+          `Dev has undeployed code on ${siteLabel} — it will be carried along`,
         )
-        if (shouldDeploy) {
-          log('status', 'Deploying dev→test...')
-          postStep('◈ Deploying dev→test...')
-          const r = await runStream(
-            `terminus env:deploy --sync-content --updatedb --cc --note "Pre-deployment sync" ${job.site}.test 2>&1`,
-            (line) => log('info', line),
-            job,
-          )
-          checkCancelled(job)
-          if (r.code !== 0) throw new Error('Deploy dev→test failed')
-          log('success', 'Dev deployed to test')
-          postStep('✓ Dev deployed to test')
-        } else {
-          await pauseHere('dev has undeployed code — deploy to test and resume when ready')
-        }
+        if (!proceed) await pauseHere('dev has undeployed code — review it, then re-run')
       }
     }
-    if (job.stages.includes('live')) {
+
+    if (job.stages.includes('live') && entryStage !== 'live') {
       const testHash = await getLatestCommitHash(job.site, 'test')
       const liveLog  = await run(`terminus env:code-log ${job.site}.live --field=hash 2>/dev/null`, job)
       if (testHash && !liveLog.stdout.includes(testHash)) {
-        log('warn', 'test has code not yet deployed to live — prompting')
-        const shouldDeploy = await prompt(
+        log('warn', 'test has commits not yet deployed to live — they will be carried along by this deploy')
+        const proceed = await prompt(
           'alignment',
-          `Test has code not yet deployed to live on \`${siteLabel}\`. Deploy test→live now before proceeding, or pause?`,
-          'Deploy test→live',
+          `Test has code not yet deployed to live on \`${siteLabel}\`. This deploy will carry it along. Continue, or pause?`,
+          'Continue',
           'Pause',
-          `Test has undeployed code on ${siteLabel}`,
+          `Test has undeployed code on ${siteLabel} — it will be carried along`,
         )
-        if (shouldDeploy) {
-          log('status', 'Deploying test→live...')
-          postStep('◈ Deploying test→live...')
-          const r = await runStream(
-            `terminus env:deploy --updatedb --cc --note "Pre-deployment sync" ${job.site}.live 2>&1`,
-            (line) => log('info', line),
-            job,
-          )
-          checkCancelled(job)
-          if (r.code !== 0) throw new Error('Deploy test→live failed')
-          log('success', 'Test deployed to live')
-          postStep('✓ Test deployed to live')
-        } else {
-          await pauseHere('test has undeployed code — deploy to live and resume when ready')
-        }
+        if (!proceed) await pauseHere('test has undeployed code — review it, then re-run')
       }
     }
 
@@ -356,10 +344,56 @@ export async function executeJob(job: Job): Promise<void> {
     const multidevList = multidevListResult.stdout
 
     for (let i = 0; i < job.stages.length; i++) {
-      const stage     = job.stages[i]
-      const nextStage = job.stages[i + 1] ?? null
+      const stage = job.stages[i]
 
       checkCancelled(job)
+
+      // Approval happens BEFORE the environment is touched, not between stages.
+      // The old gate only fired when a nextStage existed, so a single-stage job —
+      // exactly the test→live case a consultant runs after test is signed off —
+      // got no gate at all. For a multi-stage job this is the same set of gates in
+      // the same places: one before test, one before live.
+      if (!job.autoApprove && stage !== 'dev') {
+        const gate = {
+          approvalType: 'stage' as const,
+          nextStage: stage,
+          message: `Ready to deploy to ${stage}. Continue?`,
+        }
+        emit({ type: 'awaiting-approval', ...gate })
+        job.status = 'awaiting-approval'
+        void postThreadBlocks(
+          slackThreadTs,
+          buildApprovalBlocks(
+            job.id,
+            `Ready to deploy \`${job.source}\` to \`${stage}\` on \`${siteLabel}\`. A snapshot is taken first.`,
+            `✓ Deploy to ${stage}`,
+            '⏸ Pause here',
+          ),
+          `Approval needed: deploy to ${stage} on ${siteLabel}`,
+        )
+        const approved = await waitForApproval(job, gate)
+        job.status = 'running'
+        if (!approved) {
+          job.status = 'paused'
+          const at = job.completedStages[job.completedStages.length - 1] ?? job.source
+          log('warn', `Paused before ${stage}. Re-run with destination=${job.destination} when ready.`)
+          emit({ type: 'complete', status: 'paused' })
+          job.emitter.emit('done')
+          void postThreadBlocks(
+            slackThreadTs,
+            buildPausedBlocks(job.source, job.destination, siteLabel, at, job.site),
+            `Deployment paused before ${stage} on ${siteLabel}`,
+          )
+          await finalizeDeploymentRecord(job.id, {
+            stages_completed: job.completedStages, status: 'paused',
+            completed_at: new Date().toISOString(), logs: job.logs,
+            site_name: siteLabel !== job.site ? siteLabel : undefined,
+          })
+          return
+        }
+        log('info', `Approved — deploying to ${stage}...`)
+      }
+
       job.currentStage = stage
       stageStartedAt = Date.now()
       emit({ type: 'stage-start', stage })
@@ -424,50 +458,6 @@ export async function executeJob(job: Job): Promise<void> {
       emit({ type: 'stage-complete', stage })
       log('success', `Successfully deployed to ${stage}`)
 
-      if (nextStage) {
-        if (job.autoApprove) {
-          log('info', `Scheduled deployment — auto-approving to ${nextStage}`)
-        } else {
-          const stagePayload = {
-            approvalType: 'stage' as const,
-            nextStage,
-            message: `Ready to deploy to ${nextStage}. Continue?`,
-          }
-          emit({ type: 'awaiting-approval', ...stagePayload })
-          job.status = 'awaiting-approval'
-          void postThreadBlocks(
-            slackThreadTs,
-            buildApprovalBlocks(
-              job.id,
-              `\`${job.source}\` deployed to \`${stage}\` on \`${siteLabel}\`. Ready to continue to \`${nextStage}\`?`,
-              `✓ Deploy to ${nextStage}`,
-              '⏸ Pause here',
-            ),
-            `Approval needed: deploy to ${nextStage} on ${siteLabel}`,
-          )
-          const approved = await waitForApproval(job, stagePayload)
-          job.status = 'running'
-
-          if (!approved) {
-            job.status = 'paused'
-            log('warn', `Paused after ${stage}. Re-run with source=${stage} and destination=${job.destination} to continue.`)
-            emit({ type: 'complete', status: 'paused' })
-            job.emitter.emit('done')
-            void postThreadBlocks(
-              slackThreadTs,
-              buildPausedBlocks(job.source, job.destination, siteLabel, stage, job.site),
-              `Deployment paused after ${stage} on ${siteLabel}`,
-            )
-            await finalizeDeploymentRecord(job.id, {
-              stages_completed: job.completedStages, status: 'paused',
-              completed_at: new Date().toISOString(), logs: job.logs, site_name: siteLabel !== job.site ? siteLabel : undefined,
-            })
-            return
-          }
-
-          log('info', `Approved — continuing to ${nextStage}...`)
-        }
-      }
     }
 
     job.status = 'completed'
