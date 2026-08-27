@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Rocket, Calendar, Clock, History, ChevronUp, ChevronDown, RefreshCw, Layers, Globe, Plus, Trash2 } from 'lucide-react'
+import { Rocket, Calendar, Clock, History, ChevronUp, ChevronDown, RefreshCw, Layers, Globe, Plus, Trash2, ExternalLink } from 'lucide-react'
 import { computeStages, parseMuSourceDate, addBusinessDays, toDatetimeLocal } from '@/lib/pipeline'
 import Header from '@/app/components/Header'
 
@@ -28,14 +28,13 @@ interface Site {
   skip_plugins_themes: boolean
   deploy_days: number
   deploy_destination: 'dev' | 'test' | 'live' | 'multidev'
+  deploy_approval: 'manual' | 'auto'
   vrt_paths: string[]
   active: boolean
   notes?: string | null
   created_at?: string
   updated_at?: string
 }
-
-const MAX_VRT_PATHS = 70
 
 const PLATFORM_LABELS: Record<Platform, string> = {
   'wp-single':    'WordPress',
@@ -47,6 +46,7 @@ interface SiteFormState {
   site: string
   platform: Platform
   deploy_destination: 'dev' | 'test' | 'live' | 'multidev'
+  deploy_approval: 'manual' | 'auto'
   deploy_days: number
   skip_upstream: boolean
   skip_plugins_themes: boolean
@@ -55,7 +55,7 @@ interface SiteFormState {
 }
 
 const emptySiteForm: SiteFormState = {
-  site: '', platform: 'wp-single', deploy_destination: 'live', deploy_days: 1,
+  site: '', platform: 'wp-single', deploy_destination: 'live', deploy_approval: 'manual', deploy_days: 1,
   skip_upstream: false, skip_plugins_themes: false, vrt_paths_text: '', notes: '',
 }
 
@@ -81,13 +81,14 @@ function SitesTab() {
 
   useEffect(() => { void loadSites() }, [loadSites])
 
+  // Read-only display of the VRT paths (owned by the VRT app). Not written from here.
   const vrtPaths = form.vrt_paths_text.split('\n').map(p => p.trim()).filter(Boolean)
-  const vrtOver  = vrtPaths.length > MAX_VRT_PATHS
 
   const openNew  = () => { setForm(emptySiteForm); setEditing('__new__'); setError(null) }
   const openEdit = (s: Site) => {
     setForm({
       site: s.site, platform: s.platform, deploy_destination: s.deploy_destination,
+      deploy_approval: s.deploy_approval ?? 'manual',
       deploy_days: s.deploy_days, skip_upstream: s.skip_upstream,
       skip_plugins_themes: s.skip_plugins_themes,
       vrt_paths_text: (s.vrt_paths ?? []).join('\n'), notes: s.notes ?? '',
@@ -96,14 +97,17 @@ function SitesTab() {
   }
 
   const save = async () => {
-    if (!form.site.trim() || vrtOver) return
+    if (!form.site.trim()) return
     setSaving(true); setError(null)
     try {
       const payload = {
         site: form.site.trim(), platform: form.platform,
-        deploy_destination: form.deploy_destination, deploy_days: form.deploy_days,
+        deploy_destination: form.deploy_destination, deploy_approval: form.deploy_approval,
+        deploy_days: form.deploy_days,
         skip_upstream: form.skip_upstream, skip_plugins_themes: form.skip_plugins_themes,
-        vrt_paths: vrtPaths, notes: form.notes.trim() || null,
+        // vrt_paths deliberately NOT sent — the VRT app owns that config now and this
+        // form only displays it (mirrors mu-wp-staging).
+        notes: form.notes.trim() || null,
       }
       const isNew = editing === '__new__'
       const res = await fetch(isNew ? '/api/sites' : `/api/sites/${encodeURIComponent(form.site)}`, {
@@ -208,6 +212,15 @@ function SitesTab() {
               </select>
             </div>
 
+            <div className="space-y-1.5">
+              <label className={labelCls}>Deploy approval</label>
+              <select value={form.deploy_approval} onChange={e => setForm(f => ({ ...f, deploy_approval: e.target.value as SiteFormState['deploy_approval'] }))} className={inputCls}>
+                <option value="manual">Manual — pause at approval gate</option>
+                <option value="auto">Auto — run through gates unattended</option>
+              </select>
+              <p className="text-xs text-slate-500">Applies to scheduled deploys. Manual pauses for a human (+ Slack notice); auto proceeds through the stage gates.</p>
+            </div>
+
             <div className="space-y-2 pt-1 border-t border-slate-700">
               <p className="text-xs text-slate-400 font-mono pt-1">Update defaults</p>
               <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
@@ -223,10 +236,20 @@ function SitesTab() {
             </div>
 
             <div className="space-y-1.5 pt-1 border-t border-slate-700">
-              <label className={labelCls}>VRT paths <span className="text-slate-600 normal-case">(one relative URL per line)</span></label>
-              <textarea value={form.vrt_paths_text} onChange={e => setForm(f => ({ ...f, vrt_paths_text: e.target.value }))}
-                rows={6} placeholder={'/\n/about\n/blog'} className={`${inputCls} resize-y`} />
-              <p className={`text-xs ${vrtOver ? 'text-red-400' : 'text-slate-500'}`}>{vrtPaths.length} / {MAX_VRT_PATHS} paths{vrtOver ? ' — over the limit' : ''}</p>
+              <label className={labelCls}>VRT paths <span className="text-slate-600 normal-case">(managed in the VRT app — read-only here)</span></label>
+              {vrtPaths.length > 0 ? (
+                <div className="rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 font-mono text-xs text-slate-300 max-h-32 overflow-y-auto space-y-0.5">
+                  {vrtPaths.map((p, i) => <div key={i}>{p}</div>)}
+                </div>
+              ) : (
+                <p className="font-mono text-xs text-slate-500">No VRT paths configured.</p>
+              )}
+              {editing !== '__new__' && (
+                <a href={`${MU_VRT_URL}/vrt/${encodeURIComponent(form.site)}`} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-pantheon-yellow hover:underline">
+                  Edit paths, thresholds &amp; exclusions in the VRT app <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -237,7 +260,7 @@ function SitesTab() {
             {error && <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 font-mono text-xs text-red-400">{error}</div>}
 
             <div className="flex gap-2 pt-2">
-              <button onClick={save} disabled={saving || !form.site.trim() || vrtOver}
+              <button onClick={save} disabled={saving || !form.site.trim()}
                 className="flex-1 rounded-lg bg-pantheon-yellow hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-slate-900 transition-opacity disabled:opacity-40">
                 {saving ? 'Saving…' : editing === '__new__' ? 'Register Site' : 'Save Changes'}
               </button>
@@ -266,6 +289,7 @@ function SitesTab() {
                 {s.php_version && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">PHP {s.php_version}</span>}
                 {s.upstream && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.upstream}</span>}
                 <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">→ {s.deploy_destination} · +{s.deploy_days}bd</span>
+                {(s.deploy_approval ?? 'manual') === 'auto' && <span className="text-xs rounded bg-amber-900/40 px-2 py-0.5 text-amber-300">⚡ auto-deploy</span>}
                 {(s.vrt_paths?.length ?? 0) > 0 && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.vrt_paths.length} VRT</span>}
               </div>
             </div>

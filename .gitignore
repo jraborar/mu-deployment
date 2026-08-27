@@ -19,3 +19,8 @@ npm-debug.log*
 # local PR counter — tracked locally only, causes merge conflicts when in git
 .pr-counter
 tsconfig.tsbuildinfo
+
+# Local-only working docs (PR proposals, design scratchpads). Never committed —
+# mirrors the policy in mu-wp-staging. Backfill the real PR number into the local
+# doc when its PR merges.
+docs/
