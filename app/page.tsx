@@ -59,14 +59,20 @@ const emptySiteForm: SiteFormState = {
   skip_upstream: false, skip_plugins_themes: false, vrt_paths_text: '', notes: '',
 }
 
+const SITES_PER_PAGE = 5
+
 function SitesTab() {
-  const [sites, setSites]     = useState<Site[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<string | null>(null) // site machine-name, or '__new__'
-  const [form, setForm]       = useState<SiteFormState>(emptySiteForm)
-  const [saving, setSaving]   = useState(false)
-  const [busy, setBusy]       = useState<string | null>(null)
-  const [error, setError]     = useState<string | null>(null)
+  const [sites, setSites]         = useState<Site[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [editing, setEditing]     = useState<string | null>(null) // site machine-name, or '__new__'
+  const [form, setForm]           = useState<SiteFormState>(emptySiteForm)
+  const [saving, setSaving]       = useState(false)
+  const [busy, setBusy]           = useState<string | null>(null)
+  const [error, setError]         = useState<string | null>(null)
+  const [activeOpen, setActiveOpen]     = useState(true)
+  const [inactiveOpen, setInactiveOpen] = useState(true)
+  const [activePage, setActivePage]     = useState(0)
+  const [inactivePage, setInactivePage] = useState(0)
 
   const inputCls = 'w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-white placeholder-slate-500 focus:border-pantheon-yellow focus:outline-none'
   const labelCls = 'text-xs text-slate-400 font-mono'
@@ -278,41 +284,96 @@ function SitesTab() {
         </div>
       )}
 
-      {sites.map((s) => (
-        <div key={s.site} className={`rounded-xl border bg-slate-800 overflow-hidden ${s.active ? 'border-slate-700' : 'border-slate-700/50 opacity-60'}`}>
-          <div className="flex items-center gap-3 px-5 py-3">
-            <div className="flex-1 min-w-0">
-              <span className="font-mono text-sm text-white">{s.site_name ?? s.site}</span>
-              {s.site_name && <span className="ml-2 text-xs text-slate-500 font-mono">{s.site}</span>}
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-300">{PLATFORM_LABELS[s.platform]}</span>
-                {s.php_version && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">PHP {s.php_version}</span>}
-                {s.upstream && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.upstream}</span>}
-                <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">→ {s.deploy_destination} · +{s.deploy_days}bd</span>
-                {(s.deploy_approval ?? 'manual') === 'auto' && <span className="text-xs rounded bg-amber-900/40 px-2 py-0.5 text-amber-300">⚡ auto-deploy</span>}
-                {(s.vrt_paths?.length ?? 0) > 0 && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.vrt_paths.length} VRT</span>}
+      {(() => {
+        const activeSites   = sites.filter(s => s.active)
+        const inactiveSites = sites.filter(s => !s.active)
+
+        const renderRow = (s: Site) => (
+          <div key={s.site} className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3">
+              <div className="flex-1 min-w-0">
+                <span className="font-mono text-sm text-white">{s.site_name ?? s.site}</span>
+                {s.site_name && <span className="ml-2 text-xs text-slate-500 font-mono">{s.site}</span>}
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-300">{PLATFORM_LABELS[s.platform]}</span>
+                  {s.php_version && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">PHP {s.php_version}</span>}
+                  {s.upstream && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.upstream}</span>}
+                  <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">→ {s.deploy_destination} · +{s.deploy_days}bd</span>
+                  {(s.deploy_approval ?? 'manual') === 'auto' && <span className="text-xs rounded bg-amber-900/40 px-2 py-0.5 text-amber-300">⚡ auto-deploy</span>}
+                  {(s.vrt_paths?.length ?? 0) > 0 && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.vrt_paths.length} VRT</span>}
+                </div>
               </div>
+              <button onClick={() => reSync(s)} disabled={busy === s.site}
+                className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40" title="Re-sync from Pantheon">
+                <RefreshCw className={`w-4 h-4 ${busy === s.site ? 'animate-spin' : ''}`} />
+              </button>
+              <button onClick={() => openEdit(s)} className="text-xs text-slate-400 hover:text-white transition-colors">Edit</button>
+              <a href={`${MU_VRT_URL}/vrt/${encodeURIComponent(s.site)}`} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-slate-400 hover:text-sky-300 transition-colors inline-flex items-center gap-1" title="Configure VRT (paths + threshold)">
+                <Globe className="w-3.5 h-3.5" /> VRT
+              </a>
+              <button onClick={() => toggleActive(s)} disabled={busy === s.site}
+                className={`text-xs px-2 py-0.5 rounded border transition-colors ${s.active ? 'border-green-700 text-green-400 hover:bg-green-900/30' : 'border-slate-600 text-slate-500 hover:bg-slate-700'}`}>
+                {s.active ? 'Active' : 'Inactive'}
+              </button>
+              <button onClick={() => remove(s)} disabled={busy === s.site}
+                className="text-red-500 hover:text-red-400 transition-colors disabled:opacity-40" title="Remove from registry">
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
-            <button onClick={() => reSync(s)} disabled={busy === s.site}
-              className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40" title="Re-sync from Pantheon">
-              <RefreshCw className={`w-4 h-4 ${busy === s.site ? 'animate-spin' : ''}`} />
-            </button>
-            <button onClick={() => openEdit(s)} className="text-xs text-slate-400 hover:text-white transition-colors">Edit</button>
-            <a href={`${MU_VRT_URL}/vrt/${encodeURIComponent(s.site)}`} target="_blank" rel="noopener noreferrer"
-              className="text-xs text-slate-400 hover:text-sky-300 transition-colors inline-flex items-center gap-1" title="Configure VRT (paths + threshold)">
-              <Globe className="w-3.5 h-3.5" /> VRT
-            </a>
-            <button onClick={() => toggleActive(s)} disabled={busy === s.site}
-              className={`text-xs px-2 py-0.5 rounded border transition-colors ${s.active ? 'border-green-700 text-green-400 hover:bg-green-900/30' : 'border-slate-600 text-slate-500 hover:bg-slate-700'}`}>
-              {s.active ? 'Active' : 'Paused'}
-            </button>
-            <button onClick={() => remove(s)} disabled={busy === s.site}
-              className="text-red-500 hover:text-red-400 transition-colors disabled:opacity-40" title="Remove from registry">
-              <Trash2 className="w-4 h-4" />
-            </button>
           </div>
-        </div>
-      ))}
+        )
+
+        const renderGroup = (
+          label: string,
+          dot: string,
+          group: Site[],
+          open: boolean,
+          setOpen: (v: boolean) => void,
+          page: number,
+          setPage: (v: number) => void,
+        ) => {
+          const totalPages = Math.ceil(group.length / SITES_PER_PAGE)
+          const paged = group.slice(page * SITES_PER_PAGE, (page + 1) * SITES_PER_PAGE)
+          return (
+            <div className="space-y-2">
+              <button onClick={() => setOpen(!open)}
+                className="flex items-center gap-2 w-full text-left group">
+                <span className={`w-2 h-2 rounded-full ${dot}`} />
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</span>
+                <span className="text-xs text-slate-600">({group.length})</span>
+                <span className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors">
+                  {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </span>
+              </button>
+              {open && (
+                <div className="space-y-2">
+                  {paged.length === 0
+                    ? <p className="text-xs text-slate-600 font-mono pl-4">No sites</p>
+                    : paged.map(renderRow)
+                  }
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-3 pt-1">
+                      <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
+                        className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-30 transition-colors">← Prev</button>
+                      <span className="text-xs text-slate-600 font-mono">{page + 1} / {totalPages}</span>
+                      <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
+                        className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-30 transition-colors">Next →</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        }
+
+        return (
+          <>
+            {renderGroup('Active', 'bg-green-500', activeSites, activeOpen, setActiveOpen, activePage, setActivePage)}
+            {inactiveSites.length > 0 && renderGroup('Inactive', 'bg-slate-500', inactiveSites, inactiveOpen, setInactiveOpen, inactivePage, setInactivePage)}
+          </>
+        )
+      })()}
     </div>
   )
 }
