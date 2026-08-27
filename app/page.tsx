@@ -31,6 +31,7 @@ interface Site {
   deploy_approval: 'manual' | 'auto'
   vrt_paths: string[]
   active: boolean
+  paused_at?: string | null
   notes?: string | null
   created_at?: string
   updated_at?: string
@@ -285,8 +286,11 @@ function SitesTab() {
       )}
 
       {(() => {
-        const activeSites   = sites.filter(s => s.active)
-        const inactiveSites = sites.filter(s => !s.active)
+        // A site is paused if it has an active hold (paused_at set by mu-wp-staging)
+        // OR if its active flag is false. Mirrors isPaused() in mu-wp-staging/lib/sites.ts.
+        const isPaused = (s: Site) => !!s.paused_at || !s.active
+        const activeSites = sites.filter(s => !isPaused(s))
+        const pausedSites = sites.filter(s => isPaused(s))
 
         const renderRow = (s: Site) => (
           <div key={s.site} className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
@@ -371,7 +375,7 @@ function SitesTab() {
         return (
           <>
             {renderGroup('Active', 'bg-green-500', 'text-green-400', activeSites, activeOpen, setActiveOpen, activePage, setActivePage)}
-            {renderGroup('Paused', 'bg-slate-500', 'text-slate-400', inactiveSites, inactiveOpen, setInactiveOpen, inactivePage, setInactivePage)}
+            {renderGroup('Paused', 'bg-slate-500', 'text-slate-400', pausedSites, inactiveOpen, setInactiveOpen, inactivePage, setInactivePage)}
           </>
         )
       })()}
