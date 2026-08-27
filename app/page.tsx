@@ -314,7 +314,7 @@ function SitesTab() {
               </a>
               <button onClick={() => toggleActive(s)} disabled={busy === s.site}
                 className={`text-xs px-2 py-0.5 rounded border transition-colors ${s.active ? 'border-green-700 text-green-400 hover:bg-green-900/30' : 'border-slate-600 text-slate-500 hover:bg-slate-700'}`}>
-                {s.active ? 'Active' : 'Inactive'}
+                {s.active ? 'Active' : 'Paused'}
               </button>
               <button onClick={() => remove(s)} disabled={busy === s.site}
                 className="text-red-500 hover:text-red-400 transition-colors disabled:opacity-40" title="Remove from registry">
@@ -326,7 +326,8 @@ function SitesTab() {
 
         const renderGroup = (
           label: string,
-          dot: string,
+          dotCls: string,
+          labelCls: string,
           group: Site[],
           open: boolean,
           setOpen: (v: boolean) => void,
@@ -338,18 +339,18 @@ function SitesTab() {
           return (
             <div className="space-y-2">
               <button onClick={() => setOpen(!open)}
-                className="flex items-center gap-2 w-full text-left group">
-                <span className={`w-2 h-2 rounded-full ${dot}`} />
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</span>
-                <span className="text-xs text-slate-600">({group.length})</span>
-                <span className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors">
+                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 transition-colors group">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotCls}`} />
+                <span className={`text-xs font-semibold uppercase tracking-widest ${labelCls}`}>{label}</span>
+                <span className="text-xs text-slate-500 font-mono">({group.length})</span>
+                <span className="ml-auto text-slate-500 group-hover:text-slate-300 transition-colors">
                   {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </span>
               </button>
               {open && (
-                <div className="space-y-2">
+                <div className="space-y-2 pl-1">
                   {paged.length === 0
-                    ? <p className="text-xs text-slate-600 font-mono pl-4">No sites</p>
+                    ? <p className="text-xs text-slate-600 font-mono pl-3 py-2">No sites</p>
                     : paged.map(renderRow)
                   }
                   {totalPages > 1 && (
@@ -369,8 +370,8 @@ function SitesTab() {
 
         return (
           <>
-            {renderGroup('Active', 'bg-green-500', activeSites, activeOpen, setActiveOpen, activePage, setActivePage)}
-            {inactiveSites.length > 0 && renderGroup('Inactive', 'bg-slate-500', inactiveSites, inactiveOpen, setInactiveOpen, inactivePage, setInactivePage)}
+            {renderGroup('Active', 'bg-green-500', 'text-green-400', activeSites, activeOpen, setActiveOpen, activePage, setActivePage)}
+            {renderGroup('Paused', 'bg-slate-500', 'text-slate-400', inactiveSites, inactiveOpen, setInactiveOpen, inactivePage, setInactivePage)}
           </>
         )
       })()}
