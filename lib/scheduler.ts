@@ -2,7 +2,8 @@ import { claimDueSchedules, claimPreNotifications, finalizeDeploymentRecord } fr
 import { computeStages } from '@/lib/pipeline'
 import { createJob, getAllJobs } from '@/lib/jobStore'
 import { executeJob } from '@/lib/deployer'
-import { broadcastMessage, buildUpcomingBlocks } from '@/lib/slack'
+import { broadcastMessage, buildUpcomingBlocks, buildScheduledBlocks } from '@/lib/slack'
+import { getSite } from '@/lib/sites'
 
 const STALE_JOB_MS = 24 * 60 * 60 * 1000
 
@@ -56,19 +57,32 @@ export async function runDueSchedules(): Promise<{ triggered: number; skipped: n
       continue
     }
 
+    // Per-site approval policy from the shared registry: 'auto' runs through the
+    // approval gates automatically; 'manual' pauses at the first gate for a human.
+    const site = await getSite(schedule.site)
+    const autoApprove = (site?.deploy_approval ?? 'manual') === 'auto'
+
     const job = createJob({
       site: schedule.site,
       site_name: schedule.site_name ?? undefined,
       source: schedule.source,
       destination: schedule.destination,
       stages,
-      autoApprove: true,
+      autoApprove,
+      anchorAdvance: schedule.anchor_advance === true,
     })
 
     void executeJob(job)
     triggered++
 
-    console.log(`[scheduler] Triggered deployment: ${schedule.site} ${schedule.source} → ${schedule.destination} (job ${job.id})`)
+    if (!autoApprove) {
+      void broadcastMessage(
+        buildScheduledBlocks(schedule.source, schedule.destination, schedule.site_name ?? schedule.site, schedule.scheduled_for, 'Awaiting your approval — open mu-deployment to approve.', schedule.site),
+        `⏸ Manual approval required: ${schedule.source} → ${schedule.destination} on ${schedule.site_name ?? schedule.site} — approve in mu-deployment`,
+      )
+    }
+
+    console.log(`[scheduler] ${autoApprove ? 'Auto-deploying' : 'Awaiting approval for'}: ${schedule.site} ${schedule.source} → ${schedule.destination} (job ${job.id})`)
   }
 
   return { triggered, skipped }

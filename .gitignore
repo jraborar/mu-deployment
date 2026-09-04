@@ -20,5 +20,7 @@ npm-debug.log*
 .pr-counter
 tsconfig.tsbuildinfo
 
-# Local-only working docs (PR proposals, design scratchpads) — mirror mu-sites/mu-wp-staging.
+# Local-only working docs (PR proposals, design scratchpads). Never committed —
+# mirrors the policy in mu-wp-staging. Backfill the real PR number into the local
+# doc when its PR merges.
 docs/

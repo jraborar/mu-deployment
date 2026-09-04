@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { login, signInWithOAuth } from '@/app/auth/actions'
 
@@ -8,8 +8,17 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // The callback redirects here with ?error= on a failed exchange or a provider
+  // error. Nothing read it, so every OAuth failure was silent — you landed back
+  // on a clean login form with no idea why. Read off window rather than
+  // useSearchParams to avoid needing a Suspense boundary around the page.
+  useEffect(() => {
+    const err = new URLSearchParams(window.location.search).get('error')
+    if (err) setError(err)
+  }, [])
+
   const inputCls = 'w-full rounded-lg border border-pantheon-border bg-pantheon-bg-elevated px-3.5 py-2.5 font-mono text-sm text-pantheon-text placeholder-pantheon-text-dim outline-none transition focus:border-pantheon-yellow focus:ring-1 focus:ring-pantheon-yellow'
-  const btnCls   = 'w-full rounded-lg bg-pantheon-yellow px-4 py-2.5 font-mono text-sm font-semibold text-black hover:bg-pantheon-yellow-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  const btnCls   = 'w-full rounded-lg bg-pantheon-yellow px-4 py-2.5 font-mono text-sm font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
   const oauthCls = 'flex w-full items-center justify-center gap-2 rounded-lg border border-pantheon-border bg-pantheon-bg-elevated px-4 py-2.5 font-mono text-sm text-pantheon-text hover:border-pantheon-border-hi hover:bg-pantheon-bg-card transition-colors'
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

@@ -10,7 +10,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
 
   const inputCls = 'w-full rounded-lg border border-pantheon-border bg-pantheon-bg-elevated px-3.5 py-2.5 font-mono text-sm text-pantheon-text placeholder-pantheon-text-dim outline-none transition focus:border-pantheon-yellow focus:ring-1 focus:ring-pantheon-yellow'
-  const btnCls   = 'w-full rounded-lg bg-pantheon-yellow px-4 py-2.5 font-mono text-sm font-semibold text-black hover:bg-pantheon-yellow-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  const btnCls   = 'w-full rounded-lg bg-pantheon-yellow px-4 py-2.5 font-mono text-sm font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
   const oauthCls = 'flex w-full items-center justify-center gap-2 rounded-lg border border-pantheon-border bg-pantheon-bg-elevated px-4 py-2.5 font-mono text-sm text-pantheon-text hover:border-pantheon-border-hi hover:bg-pantheon-bg-card transition-colors'
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
