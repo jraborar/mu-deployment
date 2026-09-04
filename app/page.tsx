@@ -75,8 +75,8 @@ function SitesTab() {
   const [activePage, setActivePage]     = useState(0)
   const [inactivePage, setInactivePage] = useState(0)
 
-  const inputCls = 'w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-white placeholder-slate-500 focus:border-pantheon-yellow focus:outline-none'
-  const labelCls = 'text-xs text-slate-400 font-mono'
+  const inputCls = 'w-full rounded-lg border border-pantheon-border-hi bg-pantheon-bg-elevated px-3 py-2 font-mono text-sm text-pantheon-text placeholder-pantheon-text-dim focus:border-pantheon-yellow focus:outline-none'
+  const labelCls = 'text-xs text-pantheon-text-muted font-mono'
 
   const loadSites = useCallback(async () => {
     setLoading(true)
@@ -161,31 +161,31 @@ function SitesTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Globe className="w-4 h-4 text-slate-400" />
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Sites Registry</h3>
+          <Globe className="w-4 h-4 text-pantheon-text-muted" />
+          <h3 className="text-sm font-semibold text-pantheon-text-muted uppercase tracking-widest">Sites Registry</h3>
         </div>
         <button onClick={openNew}
-          className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:opacity-90 px-3 py-1.5 text-xs font-semibold text-slate-900 transition-opacity">
+          className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:opacity-90 px-3 py-1.5 text-xs font-semibold text-pantheon-bg transition-opacity">
           <Plus className="w-3.5 h-3.5" />
           Register Site
         </button>
       </div>
 
-      <p className="text-xs text-slate-500">Shared with WP Staging — register or edit here or there, same data.</p>
+      <p className="text-xs text-pantheon-text-dim">Shared with WP Staging — register or edit here or there, same data.</p>
 
       {editing && (
-        <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-visible">
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-700">
+        <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-visible">
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-pantheon-border">
             <Globe className="w-5 h-5 text-pantheon-yellow" />
             <div>
-              <h4 className="text-sm font-semibold text-white">{editing === '__new__' ? 'Register Site' : `Edit ${form.site}`}</h4>
-              {editing === '__new__' && <p className="text-xs text-slate-400">Name, PHP version &amp; upstream are auto-resolved from Pantheon.</p>}
+              <h4 className="text-sm font-semibold text-pantheon-text">{editing === '__new__' ? 'Register Site' : `Edit ${form.site}`}</h4>
+              {editing === '__new__' && <p className="text-xs text-pantheon-text-muted">Name, PHP version &amp; upstream are auto-resolved from Pantheon.</p>}
             </div>
           </div>
           <div className="px-6 py-5 space-y-4">
             {editing === '__new__' && (
               <div className="space-y-1.5">
-                <label className={labelCls}>Site ID <span className="text-slate-600 normal-case">(Pantheon machine name)</span></label>
+                <label className={labelCls}>Site ID <span className="text-pantheon-text-dim normal-case">(Pantheon machine name)</span></label>
                 <input type="text" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
                   placeholder="my-site-name" className={inputCls} />
               </div>
@@ -225,31 +225,31 @@ function SitesTab() {
                 <option value="manual">Manual — pause at approval gate</option>
                 <option value="auto">Auto — run through gates unattended</option>
               </select>
-              <p className="text-xs text-slate-500">Applies to scheduled deploys. Manual pauses for a human (+ Slack notice); auto proceeds through the stage gates.</p>
+              <p className="text-xs text-pantheon-text-dim">Applies to scheduled deploys. Manual pauses for a human (+ Slack notice); auto proceeds through the stage gates.</p>
             </div>
 
-            <div className="space-y-2 pt-1 border-t border-slate-700">
-              <p className="text-xs text-slate-400 font-mono pt-1">Update defaults</p>
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <div className="space-y-2 pt-1 border-t border-pantheon-border">
+              <p className="text-xs text-pantheon-text-muted font-mono pt-1">Update defaults</p>
+              <label className="flex items-center gap-2 text-sm text-pantheon-text cursor-pointer">
                 <input type="checkbox" checked={form.skip_upstream} onChange={e => setForm(f => ({ ...f, skip_upstream: e.target.checked }))}
-                  className="rounded border-slate-600 bg-slate-700 accent-pantheon-yellow" />
+                  className="rounded border-pantheon-border-hi bg-pantheon-bg-elevated accent-pantheon-yellow" />
                 Skip upstream updates
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-pantheon-text cursor-pointer">
                 <input type="checkbox" checked={form.skip_plugins_themes} onChange={e => setForm(f => ({ ...f, skip_plugins_themes: e.target.checked }))}
-                  className="rounded border-slate-600 bg-slate-700 accent-pantheon-yellow" />
+                  className="rounded border-pantheon-border-hi bg-pantheon-bg-elevated accent-pantheon-yellow" />
                 Skip plugins &amp; themes
               </label>
             </div>
 
-            <div className="space-y-1.5 pt-1 border-t border-slate-700">
-              <label className={labelCls}>VRT paths <span className="text-slate-600 normal-case">(managed in the VRT app — read-only here)</span></label>
+            <div className="space-y-1.5 pt-1 border-t border-pantheon-border">
+              <label className={labelCls}>VRT paths <span className="text-pantheon-text-dim normal-case">(managed in the VRT app — read-only here)</span></label>
               {vrtPaths.length > 0 ? (
-                <div className="rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 font-mono text-xs text-slate-300 max-h-32 overflow-y-auto space-y-0.5">
+                <div className="rounded-lg border border-pantheon-border bg-pantheon-bg/40 px-3 py-2 font-mono text-xs text-pantheon-text max-h-32 overflow-y-auto space-y-0.5">
                   {vrtPaths.map((p, i) => <div key={i}>{p}</div>)}
                 </div>
               ) : (
-                <p className="font-mono text-xs text-slate-500">No VRT paths configured.</p>
+                <p className="font-mono text-xs text-pantheon-text-dim">No VRT paths configured.</p>
               )}
               {editing !== '__new__' && (
                 <a href={`${MU_VRT_URL}/vrt/${encodeURIComponent(form.site)}`} target="_blank" rel="noopener noreferrer"
@@ -260,28 +260,28 @@ function SitesTab() {
             </div>
 
             <div className="space-y-1.5">
-              <label className={labelCls}>Notes <span className="text-slate-600 normal-case">(optional)</span></label>
+              <label className={labelCls}>Notes <span className="text-pantheon-text-dim normal-case">(optional)</span></label>
               <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="anything worth noting" className={inputCls} />
             </div>
 
-            {error && <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 font-mono text-xs text-red-400">{error}</div>}
+            {error && <div className="rounded-lg border border-pantheon-error/40 bg-pantheon-error/10 px-3 py-2 font-mono text-xs text-pantheon-error">{error}</div>}
 
             <div className="flex gap-2 pt-2">
               <button onClick={save} disabled={saving || !form.site.trim()}
-                className="flex-1 rounded-lg bg-pantheon-yellow hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-slate-900 transition-opacity disabled:opacity-40">
+                className="flex-1 rounded-lg bg-pantheon-yellow hover:opacity-90 px-4 py-2.5 text-sm font-semibold text-pantheon-bg transition-opacity disabled:opacity-40">
                 {saving ? 'Saving…' : editing === '__new__' ? 'Register Site' : 'Save Changes'}
               </button>
-              <button onClick={() => setEditing(null)} className="px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors">Cancel</button>
+              <button onClick={() => setEditing(null)} className="px-4 py-2.5 text-sm text-pantheon-text-muted hover:text-pantheon-text transition-colors">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {loading && sites.length === 0 && <p className="text-sm text-slate-500 font-mono text-center py-6">Loading…</p>}
+      {loading && sites.length === 0 && <p className="text-sm text-pantheon-text-dim font-mono text-center py-6">Loading…</p>}
       {!loading && sites.length === 0 && (
         <div className="text-center py-8 space-y-2">
-          <Globe className="w-8 h-8 text-slate-600 mx-auto" />
-          <p className="text-sm text-slate-500">No sites registered yet — add one above</p>
+          <Globe className="w-8 h-8 text-pantheon-text-dim mx-auto" />
+          <p className="text-sm text-pantheon-text-dim">No sites registered yet — add one above</p>
         </div>
       )}
 
@@ -293,35 +293,35 @@ function SitesTab() {
         const pausedSites = sites.filter(s => isPaused(s))
 
         const renderRow = (s: Site) => (
-          <div key={s.site} className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+          <div key={s.site} className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3">
               <div className="flex-1 min-w-0">
-                <span className="font-mono text-sm text-white">{s.site_name ?? s.site}</span>
-                {s.site_name && <span className="ml-2 text-xs text-slate-500 font-mono">{s.site}</span>}
+                <span className="font-mono text-sm text-pantheon-text">{s.site_name ?? s.site}</span>
+                {s.site_name && <span className="ml-2 text-xs text-pantheon-text-dim font-mono">{s.site}</span>}
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-300">{PLATFORM_LABELS[s.platform]}</span>
-                  {s.php_version && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">PHP {s.php_version}</span>}
-                  {s.upstream && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.upstream}</span>}
-                  <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">→ {s.deploy_destination} · +{s.deploy_days}bd</span>
-                  {(s.deploy_approval ?? 'manual') === 'auto' && <span className="text-xs rounded bg-amber-900/40 px-2 py-0.5 text-amber-300">⚡ auto-deploy</span>}
-                  {(s.vrt_paths?.length ?? 0) > 0 && <span className="text-xs rounded bg-slate-700 px-2 py-0.5 text-slate-400">{s.vrt_paths.length} VRT</span>}
+                  <span className="text-xs rounded bg-pantheon-bg-elevated px-2 py-0.5 text-pantheon-text">{PLATFORM_LABELS[s.platform]}</span>
+                  {s.php_version && <span className="text-xs rounded bg-pantheon-bg-elevated px-2 py-0.5 text-pantheon-text-muted">PHP {s.php_version}</span>}
+                  {s.upstream && <span className="text-xs rounded bg-pantheon-bg-elevated px-2 py-0.5 text-pantheon-text-muted">{s.upstream}</span>}
+                  <span className="text-xs rounded bg-pantheon-bg-elevated px-2 py-0.5 text-pantheon-text-muted">→ {s.deploy_destination} · +{s.deploy_days}bd</span>
+                  {(s.deploy_approval ?? 'manual') === 'auto' && <span className="text-xs rounded bg-pantheon-warning/40 px-2 py-0.5 text-pantheon-warning">⚡ auto-deploy</span>}
+                  {(s.vrt_paths?.length ?? 0) > 0 && <span className="text-xs rounded bg-pantheon-bg-elevated px-2 py-0.5 text-pantheon-text-muted">{s.vrt_paths.length} VRT</span>}
                 </div>
               </div>
               <button onClick={() => reSync(s)} disabled={busy === s.site}
-                className="text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-40" title="Re-sync from Pantheon">
+                className="text-pantheon-text-dim hover:text-pantheon-text transition-colors disabled:opacity-40" title="Re-sync from Pantheon">
                 <RefreshCw className={`w-4 h-4 ${busy === s.site ? 'animate-spin' : ''}`} />
               </button>
-              <button onClick={() => openEdit(s)} className="text-xs text-slate-400 hover:text-white transition-colors">Edit</button>
+              <button onClick={() => openEdit(s)} className="text-xs text-pantheon-text-muted hover:text-pantheon-text transition-colors">Edit</button>
               <a href={`${MU_VRT_URL}/vrt/${encodeURIComponent(s.site)}`} target="_blank" rel="noopener noreferrer"
-                className="text-xs text-slate-400 hover:text-sky-300 transition-colors inline-flex items-center gap-1" title="Configure VRT (paths + threshold)">
+                className="text-xs text-pantheon-text-muted hover:text-pantheon-info transition-colors inline-flex items-center gap-1" title="Configure VRT (paths + threshold)">
                 <Globe className="w-3.5 h-3.5" /> VRT
               </a>
               <button onClick={() => toggleActive(s)} disabled={busy === s.site}
-                className={`text-xs px-2 py-0.5 rounded border transition-colors ${s.active ? 'border-green-700 text-green-400 hover:bg-green-900/30' : 'border-slate-600 text-slate-500 hover:bg-slate-700'}`}>
+                className={`text-xs px-2 py-0.5 rounded border transition-colors ${s.active ? 'border-pantheon-success-dim text-pantheon-success hover:bg-pantheon-success-dim/30' : 'border-pantheon-border-hi text-pantheon-text-dim hover:bg-pantheon-bg-elevated'}`}>
                 {s.active ? 'Active' : 'Paused'}
               </button>
               <button onClick={() => remove(s)} disabled={busy === s.site}
-                className="text-red-500 hover:text-red-400 transition-colors disabled:opacity-40" title="Remove from registry">
+                className="text-pantheon-error hover:text-pantheon-error transition-colors disabled:opacity-40" title="Remove from registry">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -343,27 +343,27 @@ function SitesTab() {
           return (
             <div className="space-y-2">
               <button onClick={() => setOpen(!open)}
-                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 transition-colors group">
+                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg bg-pantheon-bg-card/60 hover:bg-pantheon-bg-card border border-pantheon-border/50 transition-colors group">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotCls}`} />
                 <span className={`text-xs font-semibold uppercase tracking-widest ${labelCls}`}>{label}</span>
-                <span className="text-xs text-slate-500 font-mono">({group.length})</span>
-                <span className="ml-auto text-slate-500 group-hover:text-slate-300 transition-colors">
+                <span className="text-xs text-pantheon-text-dim font-mono">({group.length})</span>
+                <span className="ml-auto text-pantheon-text-dim group-hover:text-pantheon-text transition-colors">
                   {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </span>
               </button>
               {open && (
                 <div className="space-y-2 pl-1">
                   {paged.length === 0
-                    ? <p className="text-xs text-slate-600 font-mono pl-3 py-2">No sites</p>
+                    ? <p className="text-xs text-pantheon-text-dim font-mono pl-3 py-2">No sites</p>
                     : paged.map(renderRow)
                   }
                   {totalPages > 1 && (
                     <div className="flex items-center justify-center gap-3 pt-1">
                       <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
-                        className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-30 transition-colors">← Prev</button>
-                      <span className="text-xs text-slate-600 font-mono">{page + 1} / {totalPages}</span>
+                        className="text-xs text-pantheon-text-dim hover:text-pantheon-text disabled:opacity-30 transition-colors">← Prev</button>
+                      <span className="text-xs text-pantheon-text-dim font-mono">{page + 1} / {totalPages}</span>
                       <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
-                        className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-30 transition-colors">Next →</button>
+                        className="text-xs text-pantheon-text-dim hover:text-pantheon-text disabled:opacity-30 transition-colors">Next →</button>
                     </div>
                   )}
                 </div>
@@ -374,8 +374,8 @@ function SitesTab() {
 
         return (
           <>
-            {renderGroup('Active', 'bg-green-500', 'text-green-400', activeSites, activeOpen, setActiveOpen, activePage, setActivePage)}
-            {renderGroup('Paused', 'bg-slate-500', 'text-slate-400', pausedSites, inactiveOpen, setInactiveOpen, inactivePage, setInactivePage)}
+            {renderGroup('Active', 'bg-pantheon-success', 'text-pantheon-success', activeSites, activeOpen, setActiveOpen, activePage, setActivePage)}
+            {renderGroup('Paused', 'bg-pantheon-bg-neutral-hi', 'text-pantheon-text-muted', pausedSites, inactiveOpen, setInactiveOpen, inactivePage, setInactivePage)}
           </>
         )
       })()}
@@ -526,7 +526,7 @@ function ApprovalPrompt({
       <div className="flex gap-3">
         <button
           onClick={onApprove}
-          className="rounded-lg bg-pantheon-yellow px-4 py-2 font-mono text-xs font-semibold text-black hover:bg-pantheon-yellow-dark transition-colors"
+          className="rounded-lg bg-pantheon-yellow px-4 py-2 font-mono text-xs font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark transition-colors"
         >
           {approveLabel ?? defaultApprove}
         </button>
@@ -716,13 +716,13 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
   const [loading, setLoading] = useState(false)
 
   const statusColors: Record<string, string> = {
-    completed: 'text-green-400',
-    failed:    'text-red-400',
-    paused:    'text-orange-400',
-    cancelled: 'text-slate-500',
-    running:   'text-yellow-400',
+    completed: 'text-pantheon-success',
+    failed:    'text-pantheon-error',
+    paused:    'text-pantheon-warning',
+    cancelled: 'text-pantheon-text-dim',
+    running:   'text-pantheon-yellow',
   }
-  const siteColor = statusColors[item.status] ?? 'text-slate-400'
+  const siteColor = statusColors[item.status] ?? 'text-pantheon-text-muted'
   const endLabel  = item.status === 'failed' ? 'Failed:' : item.status === 'paused' ? 'Paused:' : item.status === 'cancelled' ? 'Cancelled:' : 'Completed:'
 
   const fmt = (ts: string) =>
@@ -751,7 +751,7 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
   const keyLogs = logs ? logs.filter(l => ['error', 'warn', 'success'].includes(l.logType)).slice(-5) : []
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-1.5">
+    <div className="rounded-lg border border-pantheon-border bg-pantheon-bg-card p-4 space-y-1.5">
       {/* Row 1: Site name + status */}
       <div className="flex items-start justify-between gap-3">
         <div className="truncate">
@@ -759,7 +759,7 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
             {item.site_name ?? item.site}
           </span>
           {item.site_name && (
-            <span className="ml-1.5 font-mono font-normal text-slate-500 text-xs">· {item.site}</span>
+            <span className="ml-1.5 font-mono font-normal text-pantheon-text-dim text-xs">· {item.site}</span>
           )}
         </div>
         <span className={`font-mono text-xs font-semibold shrink-0 ${siteColor}`}>{item.status}</span>
@@ -768,39 +768,39 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
       {/* Row 2: Pipeline chips */}
       <div className="font-mono text-xs flex items-center flex-wrap gap-x-2 gap-y-0.5">
         <span className="text-pantheon-yellow">{item.source}</span>
-        <span className="text-slate-600">→</span>
-        <span className="text-slate-300">{item.destination}</span>
+        <span className="text-pantheon-text-dim">→</span>
+        <span className="text-pantheon-text">{item.destination}</span>
         {item.stages_completed.length > 0 && (
           <>
-            <span className="text-slate-600">·</span>
-            <span className="text-green-400">{item.stages_completed.join(' → ')} ✓</span>
+            <span className="text-pantheon-text-dim">·</span>
+            <span className="text-pantheon-success">{item.stages_completed.join(' → ')} ✓</span>
           </>
         )}
         {item.completed_at && (
           <>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-500">{dur(item.started_at, item.completed_at)}</span>
+            <span className="text-pantheon-text-dim">·</span>
+            <span className="text-pantheon-text-dim">{dur(item.started_at, item.completed_at)}</span>
           </>
         )}
       </div>
 
       {/* Row 3: Timestamps */}
-      <div className="flex flex-wrap gap-x-4 font-mono text-xs text-slate-400">
+      <div className="flex flex-wrap gap-x-4 font-mono text-xs text-pantheon-text-muted">
         <span>Started: {fmt(item.started_at)}</span>
         <span>{endLabel} {item.completed_at ? fmt(item.completed_at) : '—'}</span>
       </div>
 
       {/* Resume button */}
       {item.status === 'paused' && onResume && (
-        <button onClick={() => onResume(item)} className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors">
+        <button onClick={() => onResume(item)} className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-pantheon-bg transition-colors">
           ▶ Resume deployment
         </button>
       )}
 
       {/* Expanded key log entries */}
       {open && (
-        <div className="border-t border-slate-700 pt-3 space-y-1.5">
-          {loading && <p className="font-mono text-xs text-slate-500">Loading…</p>}
+        <div className="border-t border-pantheon-border pt-3 space-y-1.5">
+          {loading && <p className="font-mono text-xs text-pantheon-text-dim">Loading…</p>}
           {logs !== null && keyLogs.length > 0 && keyLogs.map((entry, i) => {
             const style = LOG_STYLES[entry.logType] ?? LOG_STYLES.info
             return (
@@ -810,14 +810,14 @@ function HistoryCard({ item, onResume }: { item: HistoryItem; onResume?: (item: 
             )
           })}
           {logs !== null && keyLogs.length === 0 && (
-            <p className="font-mono text-xs text-slate-500">No key events recorded.</p>
+            <p className="font-mono text-xs text-pantheon-text-dim">No key events recorded.</p>
           )}
         </div>
       )}
 
       {/* Show Details — bottom-right */}
       <div className="flex justify-end pt-0.5">
-        <button onClick={toggle} className="flex items-center gap-1 text-xs text-white hover:text-pantheon-yellow transition-colors">
+        <button onClick={toggle} className="flex items-center gap-1 text-xs text-pantheon-text hover:text-pantheon-yellow transition-colors">
           {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           {open ? 'Hide Details' : 'Show Details'}
         </button>
@@ -923,13 +923,13 @@ function RunningJobCard({
               <div className="flex gap-2">
                 <button
                   onClick={onApprove}
-                  className="rounded-lg bg-pantheon-yellow px-4 py-1.5 font-mono text-xs font-semibold text-black hover:bg-pantheon-yellow-dark transition-colors"
+                  className="rounded-lg bg-pantheon-yellow px-4 py-1.5 font-mono text-xs font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark transition-colors"
                 >
                   {approval.approveLabel ?? '✓ Approve'}
                 </button>
                 <button
                   onClick={onReject}
-                  className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-4 py-1.5 text-xs font-semibold text-slate-900 hover:text-pantheon-text transition-colors"
+                  className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-4 py-1.5 text-xs font-semibold text-pantheon-bg hover:text-pantheon-text transition-colors"
                 >
                   {approval.rejectLabel ?? '✕ Reject'}
                 </button>
@@ -974,8 +974,8 @@ function RunningJobCard({
 // ── Input + Select shared styles ───────────────────────────────────────────────
 
 const inputCls = [
-  'w-full rounded-lg border border-slate-600 bg-slate-700',
-  'px-3 py-2 font-mono text-sm text-white placeholder-slate-500',
+  'w-full rounded-lg border border-pantheon-border-hi bg-pantheon-bg-elevated',
+  'px-3 py-2 font-mono text-sm text-pantheon-text placeholder-pantheon-text-dim',
   'outline-none transition focus:border-pantheon-yellow',
   'disabled:opacity-50',
 ].join(' ')
@@ -1566,7 +1566,7 @@ export default function Page() {
       <Header current="deployment" />
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-700">
+      <div className="flex gap-1 border-b border-pantheon-border">
         {TABS.map(t => (
           <button
             key={t.key}
@@ -1575,7 +1575,7 @@ export default function Page() {
               'relative px-4 py-2 text-sm font-medium transition-colors',
               tab === t.key
                 ? 'border-b-2 border-pantheon-yellow text-pantheon-yellow'
-                : 'text-slate-400 hover:text-slate-200',
+                : 'text-pantheon-text-muted hover:text-pantheon-text',
             ].join(' ')}
           >
             {t.label}
@@ -1597,10 +1597,10 @@ export default function Page() {
                 A deployment session was found. Reconnect to see live output?
               </span>
               <div className="flex gap-2">
-                <button onClick={reconnect} className="rounded-lg bg-pantheon-yellow px-4 py-1.5 font-mono text-xs font-semibold text-black hover:bg-pantheon-yellow-dark">
+                <button onClick={reconnect} className="rounded-lg bg-pantheon-yellow px-4 py-1.5 font-mono text-xs font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark">
                   Reconnect
                 </button>
-                <button onClick={reset} className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-4 py-1.5 text-xs font-semibold text-slate-900">
+                <button onClick={reset} className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-4 py-1.5 text-xs font-semibold text-pantheon-bg">
                   Dismiss
                 </button>
               </div>
@@ -1609,14 +1609,14 @@ export default function Page() {
 
           {/* Config form */}
           {(deployStatus === 'idle' || deployStatus === 'paused') && (
-            <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-hidden">
               {/* Card header */}
-              <div className="px-6 py-5 border-b border-slate-700">
+              <div className="px-6 py-5 border-b border-pantheon-border">
                 <div className="flex items-center gap-2 mb-1">
                   <Rocket className="w-5 h-5 text-pantheon-yellow" />
-                  <h2 className="text-white font-semibold">Run Deployment</h2>
+                  <h2 className="text-pantheon-text font-semibold">Run Deployment</h2>
                 </div>
-                <p className="text-slate-400 text-sm">Deploy a multidev through the pipeline with per-stage approval gates</p>
+                <p className="text-pantheon-text-muted text-sm">Deploy a multidev through the pipeline with per-stage approval gates</p>
               </div>
 
               <div className="px-6 py-5 space-y-5">
@@ -1628,7 +1628,7 @@ export default function Page() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs text-slate-400 font-mono">Site ID</label>
+                    <label className="text-xs text-pantheon-text-muted font-mono">Site ID</label>
                     <input
                       className={inputCls}
                       placeholder="my-pantheon-site"
@@ -1638,8 +1638,8 @@ export default function Page() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs text-slate-400 font-mono">
-                      Source <span className="text-slate-600 normal-case font-normal">(multidev, dev, test or live)</span>
+                    <label className="text-xs text-pantheon-text-muted font-mono">
+                      Source <span className="text-pantheon-text-dim normal-case font-normal">(multidev, dev, test or live)</span>
                     </label>
                     <input
                       className={inputCls}
@@ -1651,8 +1651,8 @@ export default function Page() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-mono">
-                    Commit label <span className="text-slate-600 normal-case font-normal">(used in "Deployed from …")</span>
+                  <label className="text-xs text-pantheon-text-muted font-mono">
+                    Commit label <span className="text-pantheon-text-dim normal-case font-normal">(used in "Deployed from …")</span>
                   </label>
                   <input
                     className={inputCls}
@@ -1662,8 +1662,8 @@ export default function Page() {
                   />
                 </div>
 
-                <div className="space-y-1.5 pt-1 border-t border-slate-700">
-                  <label className="text-xs text-slate-400 font-mono pt-1">Final destination</label>
+                <div className="space-y-1.5 pt-1 border-t border-pantheon-border">
+                  <label className="text-xs text-pantheon-text-muted font-mono pt-1">Final destination</label>
                   <div className="flex gap-2">
                     {DEST_OPTS.map(d => (
                       <button
@@ -1673,7 +1673,7 @@ export default function Page() {
                           'rounded-lg border px-4 py-2 text-sm transition-colors',
                           destination === d
                             ? 'border-pantheon-yellow bg-pantheon-yellow/10 text-pantheon-yellow font-medium'
-                            : 'border-slate-600 text-slate-400 hover:border-slate-500 hover:text-slate-200',
+                            : 'border-pantheon-border-hi text-pantheon-text-muted hover:border-pantheon-text-dim hover:text-pantheon-text',
                         ].join(' ')}
                       >
                         {d}
@@ -1682,21 +1682,21 @@ export default function Page() {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-700 space-y-3">
-                  <p className="text-xs text-slate-500 font-mono">
-                    Pipeline: <span className="text-slate-300">{computeStages(source, destination).join(' → ') || '—'}</span>
+                <div className="pt-2 border-t border-pantheon-border space-y-3">
+                  <p className="text-xs text-pantheon-text-dim font-mono">
+                    Pipeline: <span className="text-pantheon-text">{computeStages(source, destination).join(' → ') || '—'}</span>
                   </p>
                   <div className="flex gap-2">
                     <button
                       onClick={startDeployment}
                       disabled={!site || !source}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-pantheon-yellow py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-pantheon-yellow py-2.5 text-sm font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       <Rocket className="w-4 h-4" />
                       Start Deployment
                     </button>
                     {deployStatus === 'paused' && (
-                      <button onClick={reset} className="px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors">
+                      <button onClick={reset} className="px-4 py-2.5 text-sm text-pantheon-text-muted hover:text-pantheon-text transition-colors">
                         Cancel
                       </button>
                     )}
@@ -1708,7 +1708,7 @@ export default function Page() {
 
           {/* Pipeline bar */}
           {stages.length > 0 && (
-            <div className="rounded-xl border border-slate-700 bg-slate-800 px-6 py-5">
+            <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card px-6 py-5">
               <div className="mb-4 flex items-center justify-between">
                 <span className="font-mono text-xs font-semibold uppercase tracking-widest text-pantheon-text-muted">
                   Pipeline
@@ -1717,7 +1717,7 @@ export default function Page() {
                   {!isTerminal && deployStatus !== 'idle' && (
                     <button
                       onClick={cancelDeployment}
-                      className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                      className="rounded border border-pantheon-error/40 px-3 py-1 text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors"
                     >
                       ✕ Stop
                     </button>
@@ -1725,7 +1725,7 @@ export default function Page() {
                   {isTerminal && (
                     <button
                       onClick={reset}
-                      className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+                      className="rounded border border-pantheon-border-hi px-3 py-1 text-xs text-pantheon-text-muted hover:border-pantheon-text-dim hover:text-pantheon-text transition-colors"
                     >
                       New Deployment
                     </button>
@@ -1767,8 +1767,8 @@ export default function Page() {
 
           {/* Log console */}
           {logs.length > 0 && (
-            <div className="rounded-xl border border-slate-700 overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-slate-700 bg-slate-800 px-4 py-2.5">
+            <div className="rounded-xl border border-pantheon-border overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-pantheon-border bg-pantheon-bg-card px-4 py-2.5">
                 <div className="flex gap-1.5">
                   <div className="h-3 w-3 rounded-full bg-pantheon-error/70" />
                   <div className="h-3 w-3 rounded-full bg-pantheon-warning/70" />
@@ -1791,7 +1791,7 @@ export default function Page() {
               </div>
               <div
                 ref={consoleRef}
-                className="console-output h-72 overflow-y-auto bg-slate-900 p-4 space-y-0.5"
+                className="console-output h-72 overflow-y-auto bg-pantheon-bg p-4 space-y-0.5"
               >
                 {logs.map((entry, i) => <LogLine key={i} entry={entry} />)}
                 {deployStatus === 'running' && (
@@ -1822,12 +1822,12 @@ export default function Page() {
           {/* Section header + toggle button — WP Staging pattern */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-slate-400" />
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Scheduled Deployments</h3>
+              <Calendar className="w-4 h-4 text-pantheon-text-muted" />
+              <h3 className="text-sm font-semibold text-pantheon-text-muted uppercase tracking-widest">Scheduled Deployments</h3>
             </div>
             <button
               onClick={() => setShowSchedForm(f => !f)}
-              className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-slate-900 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-3 py-1.5 text-xs font-semibold text-pantheon-bg transition-colors"
             >
               <Calendar className="w-3.5 h-3.5" />
               {showSchedForm ? 'Cancel' : '+ Add Schedule'}
@@ -1836,21 +1836,21 @@ export default function Page() {
 
           {/* Form — hidden until button clicked */}
           {showSchedForm && (
-          <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-700">
+          <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-hidden">
+            <div className="px-6 py-5 border-b border-pantheon-border">
               <div className="flex items-center gap-2 mb-1">
-                <Calendar className="w-5 h-5 text-slate-400" />
-                <h2 className="text-slate-400 font-semibold uppercase tracking-widest text-sm">Schedule a Deployment</h2>
+                <Calendar className="w-5 h-5 text-pantheon-text-muted" />
+                <h2 className="text-pantheon-text-muted font-semibold uppercase tracking-widest text-sm">Schedule a Deployment</h2>
               </div>
-              <p className="text-slate-500 text-sm">Auto-triggered by the scheduler at the specified Manila time</p>
+              <p className="text-pantheon-text-dim text-sm">Auto-triggered by the scheduler at the specified Manila time</p>
             </div>
             <div className="px-6 py-5 space-y-5">
 
             {/* Sites */}
             <div className="space-y-2">
               <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                <span className="text-xs text-slate-400 font-mono">Site ID</span>
-                <span className="text-xs text-slate-400 font-mono">Source</span>
+                <span className="text-xs text-pantheon-text-muted font-mono">Site ID</span>
+                <span className="text-xs text-pantheon-text-muted font-mono">Source</span>
                 <span />
               </div>
               {schedSites.map((row, i) => {
@@ -1860,32 +1860,32 @@ export default function Page() {
                     <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
                       <input className={inputCls} placeholder="my-pantheon-site" value={row.site} onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, site: e.target.value } : s))} />
                       <input className={inputCls} placeholder="autopilot or dev" value={row.source} onChange={e => setSchedSites(prev => prev.map((s, idx) => idx === i ? { ...s, source: e.target.value } : s))} />
-                      <button onClick={() => setSchedSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev)} disabled={schedSites.length === 1} className="rounded border border-slate-600 px-2 py-2 text-xs text-slate-400 hover:border-red-500/40 hover:text-red-400 disabled:opacity-30 transition-colors">✕</button>
+                      <button onClick={() => setSchedSites(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev)} disabled={schedSites.length === 1} className="rounded border border-pantheon-border-hi px-2 py-2 text-xs text-pantheon-text-muted hover:border-pantheon-error/40 hover:text-pantheon-error disabled:opacity-30 transition-colors">✕</button>
                     </div>
                     {isDuplicate && <p className="text-xs text-pantheon-warning font-mono pl-1">⚠ {row.site} already has a pending schedule.</p>}
                   </div>
                 )
               })}
-              <button onClick={() => setSchedSites(prev => [...prev, { site: '', source: '' }])} className="text-xs text-slate-400 hover:text-slate-200 transition-colors">
+              <button onClick={() => setSchedSites(prev => [...prev, { site: '', source: '' }])} className="text-xs text-pantheon-text-muted hover:text-pantheon-text transition-colors">
                 + Add another site
               </button>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 pt-1 border-t border-slate-700">
+            <div className="grid gap-4 sm:grid-cols-2 pt-1 border-t border-pantheon-border">
               <div className="space-y-1.5 pt-1">
-                <label className="text-xs text-slate-400 font-mono">Final destination</label>
+                <label className="text-xs text-pantheon-text-muted font-mono">Final destination</label>
                 <div className="flex gap-2">
                   {DEST_OPTS.map(d => (
-                    <button key={d} onClick={() => setSchedDest(d)} className={['rounded-lg border px-4 py-2 text-sm transition-colors', schedDest === d ? 'border-pantheon-yellow bg-pantheon-yellow/10 text-pantheon-yellow font-medium' : 'border-slate-600 text-slate-400 hover:border-slate-500 hover:text-slate-200'].join(' ')}>{d}</button>
+                    <button key={d} onClick={() => setSchedDest(d)} className={['rounded-lg border px-4 py-2 text-sm transition-colors', schedDest === d ? 'border-pantheon-yellow bg-pantheon-yellow/10 text-pantheon-yellow font-medium' : 'border-pantheon-border-hi text-pantheon-text-muted hover:border-pantheon-text-dim hover:text-pantheon-text'].join(' ')}>{d}</button>
                   ))}
                 </div>
               </div>
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-slate-400 font-mono">Deployment date</label>
-                  {schedDateFetching && <span className="text-xs text-slate-500 animate-pulse">looking up...</span>}
+                  <label className="text-xs text-pantheon-text-muted font-mono">Deployment date</label>
+                  {schedDateFetching && <span className="text-xs text-pantheon-text-dim animate-pulse">looking up...</span>}
                   {schedDefaultDate && schedCreatedDate && !schedDateFetching && (
-                    <span className="text-xs text-slate-500">· default <span className="text-pantheon-info">{schedDefaultDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span></span>
+                    <span className="text-xs text-pantheon-text-dim">· default <span className="text-pantheon-info">{schedDefaultDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span></span>
                   )}
                 </div>
                 <input type="datetime-local" className={inputCls} value={schedFor} onChange={e => { schedForEdited.current = true; setSchedFor(e.target.value) }} />
@@ -1895,25 +1895,25 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 pt-1 border-t border-slate-700">
+            <div className="grid gap-4 sm:grid-cols-2 pt-1 border-t border-pantheon-border">
               <div className="space-y-1.5 pt-1">
-                <label className="text-xs text-slate-400 font-mono">MU Consultant</label>
+                <label className="text-xs text-pantheon-text-muted font-mono">MU Consultant</label>
                 <input className={inputCls} placeholder="e.g. Jasper" value={schedConsultant} onChange={e => setSchedConsultant(e.target.value)} />
               </div>
               <div className="space-y-1.5 pt-1">
-                <label className="text-xs text-slate-400 font-mono">Notes (optional)</label>
+                <label className="text-xs text-pantheon-text-muted font-mono">Notes (optional)</label>
                 <input className={inputCls} placeholder="e.g. Sprint 12 release" value={schedNotes} onChange={e => setSchedNotes(e.target.value)} />
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-700 space-y-3">
-              <p className="text-xs text-slate-500 font-mono">Auto-triggered every minute by the scheduler</p>
+            <div className="pt-2 border-t border-pantheon-border space-y-3">
+              <p className="text-xs text-pantheon-text-dim font-mono">Auto-triggered every minute by the scheduler</p>
               <div className="flex gap-2">
-                <button onClick={submitSchedule} disabled={!schedSites.some(s => s.site && s.source) || !schedFor || schedLoading} className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-pantheon-yellow py-2.5 text-sm font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <button onClick={submitSchedule} disabled={!schedSites.some(s => s.site && s.source) || !schedFor || schedLoading} className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-pantheon-yellow py-2.5 text-sm font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   <Calendar className="w-4 h-4" />
                   {schedLoading ? 'Saving…' : 'Schedule Deployment'}
                 </button>
-                <button onClick={() => { setSchedSites([{ site: '', source: '' }]); setSchedFor(''); setSchedNotes(''); setSchedConsultant('') }} className="px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors">
+                <button onClick={() => { setSchedSites([{ site: '', source: '' }]); setSchedFor(''); setSchedNotes(''); setSchedConsultant('') }} className="px-4 py-2.5 text-sm text-pantheon-text-muted hover:text-pantheon-text transition-colors">
                   Clear
                 </button>
               </div>
@@ -1925,22 +1925,22 @@ export default function Page() {
           {/* Existing schedules as cards */}
           {schedules.length === 0 && !showSchedForm && (
             <div className="text-center py-8 space-y-2">
-              <Calendar className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-sm text-slate-500">No scheduled deployments — click + Add Schedule to add one</p>
+              <Calendar className="w-8 h-8 text-pantheon-text-dim mx-auto" />
+              <p className="text-sm text-pantheon-text-dim">No scheduled deployments — click + Add Schedule to add one</p>
             </div>
           )}
           {schedules.map(item => (
-            <div key={item.id} className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            <div key={item.id} className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3">
                 <div className="flex-1 min-w-0">
-                  <span className="font-mono text-sm text-white">{item.site_name ?? item.site}</span>
-                  <p className="font-mono text-xs text-slate-400 mt-0.5">{item.source} → {item.destination}</p>
+                  <span className="font-mono text-sm text-pantheon-text">{item.site_name ?? item.site}</span>
+                  <p className="font-mono text-xs text-pantheon-text-muted mt-0.5">{item.source} → {item.destination}</p>
                 </div>
-                <div className="hidden sm:flex flex-col items-end text-xs text-slate-500">
-                  <span className="text-slate-300">{new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                <div className="hidden sm:flex flex-col items-end text-xs text-pantheon-text-dim">
+                  <span className="text-pantheon-text">{new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                   {item.notes && <span>{item.notes}</span>}
                 </div>
-                <button onClick={() => cancelSchedule(item.id)} className="text-red-500 hover:text-red-400 transition-colors ml-1" title="Remove schedule">
+                <button onClick={() => cancelSchedule(item.id)} className="text-pantheon-error hover:text-pantheon-error transition-colors ml-1" title="Remove schedule">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                 </button>
               </div>
@@ -1955,12 +1955,12 @@ export default function Page() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-slate-400" />
-              <h3 className="text-sm font-semibold text-white uppercase tracking-widest">Upcoming Deployments</h3>
+              <Clock className="w-4 h-4 text-pantheon-text-muted" />
+              <h3 className="text-sm font-semibold text-pantheon-text uppercase tracking-widest">Upcoming Deployments</h3>
             </div>
             <button
               onClick={() => fetch('/api/schedule').then(r => r.json()).then(setSchedules).catch(() => {})}
-              className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
+              className="flex items-center gap-1.5 text-xs text-pantheon-text hover:text-pantheon-yellow transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Refresh
@@ -1977,45 +1977,45 @@ export default function Page() {
             const deployRow = (item: typeof schedules[number], last: boolean) => {
               const isEditing = editingId === item.id
               return (
-                <div key={item.id} className={`p-4 space-y-2 ${!last ? 'border-b border-slate-700/60' : ''}`}>
+                <div key={item.id} className={`p-4 space-y-2 ${!last ? 'border-b border-pantheon-border/60' : ''}`}>
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-semibold text-white">{item.site_name ?? item.site}</span>
+                        <span className="font-mono text-sm font-semibold text-pantheon-text">{item.site_name ?? item.site}</span>
                         <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">{item.source} → {item.destination}</span>
                       </div>
-                      {!isEditing && <p className="font-mono text-xs text-slate-300 mt-1">
+                      {!isEditing && <p className="font-mono text-xs text-pantheon-text mt-1">
                         {new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                        <span className="text-slate-500 ml-1">(Manila)</span>
+                        <span className="text-pantheon-text-dim ml-1">(Manila)</span>
                       </p>}
-                      {item.notes && !isEditing && <p className="font-mono text-xs text-slate-500 mt-0.5">{item.notes}</p>}
+                      {item.notes && !isEditing && <p className="font-mono text-xs text-pantheon-text-dim mt-0.5">{item.notes}</p>}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {!isEditing && <>
-                        <button onClick={() => runScheduleNow(item)} className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-2.5 py-1.5 text-xs font-semibold text-slate-900 transition-colors">▶</button>
-                        <button onClick={() => { setEditingId(item.id); setEditFor(toManilaDatetimeLocal(item.scheduled_for)); setEditNotes(item.notes ?? ''); setEditDest(item.destination) }} className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-400 hover:border-slate-400 transition-colors">✎</button>
-                        <button onClick={() => cancelSchedule(item.id)} className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors">✕</button>
+                        <button onClick={() => runScheduleNow(item)} className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-2.5 py-1.5 text-xs font-semibold text-pantheon-bg transition-colors">▶</button>
+                        <button onClick={() => { setEditingId(item.id); setEditFor(toManilaDatetimeLocal(item.scheduled_for)); setEditNotes(item.notes ?? ''); setEditDest(item.destination) }} className="rounded border border-pantheon-border-hi px-2.5 py-1 text-xs text-pantheon-text-muted hover:border-pantheon-text-muted transition-colors">✎</button>
+                        <button onClick={() => cancelSchedule(item.id)} className="rounded border border-pantheon-error/40 px-2.5 py-1 text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors">✕</button>
                       </>}
                     </div>
                   </div>
                   {isEditing && (
-                    <div className="space-y-3 pt-2 border-t border-slate-700">
+                    <div className="space-y-3 pt-2 border-t border-pantheon-border">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <label className="text-xs text-slate-400 font-mono">Date & Time (Manila)</label>
-                          <input type="datetime-local" value={editFor} onChange={e => setEditFor(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white focus:border-pantheon-yellow focus:outline-none" />
+                          <label className="text-xs text-pantheon-text-muted font-mono">Date & Time (Manila)</label>
+                          <input type="datetime-local" value={editFor} onChange={e => setEditFor(e.target.value)} className="w-full rounded border border-pantheon-border-hi bg-pantheon-bg-elevated px-2 py-1.5 font-mono text-xs text-pantheon-text focus:border-pantheon-yellow focus:outline-none" />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-slate-400 font-mono">Destination</label>
-                          <select value={editDest} onChange={e => setEditDest(e.target.value)} className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-pantheon-yellow focus:outline-none">
+                          <label className="text-xs text-pantheon-text-muted font-mono">Destination</label>
+                          <select value={editDest} onChange={e => setEditDest(e.target.value)} className="w-full rounded border border-pantheon-border-hi bg-pantheon-bg-elevated px-2 py-1.5 text-xs text-pantheon-text focus:border-pantheon-yellow focus:outline-none">
                             {['dev','test','live'].map(d => <option key={d} value={d}>{d}</option>)}
                           </select>
                         </div>
                       </div>
-                      <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Notes (optional)" className="w-full rounded border border-slate-600 bg-slate-700 px-2 py-1.5 font-mono text-xs text-white placeholder-slate-500 focus:border-pantheon-yellow focus:outline-none" />
+                      <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Notes (optional)" className="w-full rounded border border-pantheon-border-hi bg-pantheon-bg-elevated px-2 py-1.5 font-mono text-xs text-pantheon-text placeholder-pantheon-text-dim focus:border-pantheon-yellow focus:outline-none" />
                       <div className="flex gap-2">
-                        <button onClick={() => saveEdit(item.id)} disabled={!editFor} className="flex-1 rounded-lg bg-pantheon-yellow py-2 text-xs font-semibold text-slate-900 hover:bg-pantheon-yellow-dark disabled:opacity-40 transition-colors">Save</button>
-                        <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors">Cancel</button>
+                        <button onClick={() => saveEdit(item.id)} disabled={!editFor} className="flex-1 rounded-lg bg-pantheon-yellow py-2 text-xs font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark disabled:opacity-40 transition-colors">Save</button>
+                        <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs text-pantheon-text-muted hover:text-pantheon-text transition-colors">Cancel</button>
                       </div>
                     </div>
                   )}
@@ -2032,28 +2032,28 @@ export default function Page() {
               const safePage = Math.min(page, totalPages - 1)
               const paged = list.slice(safePage * MANUAL_PAGE_SIZE, (safePage + 1) * MANUAL_PAGE_SIZE)
               return (
-                <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-                  <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-700/40 transition-colors">
+                <div className="rounded-xl border border-pantheon-border bg-pantheon-bg-card overflow-hidden">
+                  <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-3 hover:bg-pantheon-bg-elevated/40 transition-colors">
                     <div className="flex items-center gap-2">
                       {dotPulse
                         ? <span className="w-2 h-2 rounded-full bg-pantheon-yellow animate-pulse inline-block" />
-                        : <Calendar className="w-4 h-4 text-slate-400" />}
-                      <h3 className="text-sm font-semibold text-white uppercase tracking-widest">{title}</h3>
-                      {list.length > 0 && <span className="text-xs rounded-full bg-slate-600 text-slate-300 px-2 py-0.5 font-mono">{list.length}</span>}
+                        : <Calendar className="w-4 h-4 text-pantheon-text-muted" />}
+                      <h3 className="text-sm font-semibold text-pantheon-text uppercase tracking-widest">{title}</h3>
+                      {list.length > 0 && <span className="text-xs rounded-full bg-pantheon-bg-neutral text-pantheon-text px-2 py-0.5 font-mono">{list.length}</span>}
                     </div>
-                    {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                    {open ? <ChevronUp className="w-4 h-4 text-pantheon-text-muted" /> : <ChevronDown className="w-4 h-4 text-pantheon-text-muted" />}
                   </button>
                   {open && (
-                    <div className="border-t border-slate-700">
+                    <div className="border-t border-pantheon-border">
                       {list.length === 0
-                        ? <p className="text-sm text-slate-500 text-center py-6">{emptyMsg}</p>
+                        ? <p className="text-sm text-pantheon-text-dim text-center py-6">{emptyMsg}</p>
                         : (<>
                           {paged.map((item, i) => deployRow(item, i === paged.length - 1))}
                           {totalPages > 1 && (
-                            <div className="flex items-center justify-center gap-2 px-5 py-2 border-t border-slate-700/60">
-                              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage === 0} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">← Prev</button>
-                              <span className="font-mono text-xs text-slate-500">{safePage + 1} / {totalPages}</span>
-                              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors">Next →</button>
+                            <div className="flex items-center justify-center gap-2 px-5 py-2 border-t border-pantheon-border/60">
+                              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage === 0} className="rounded border border-pantheon-border-hi px-3 py-1 text-xs text-pantheon-text-muted hover:border-pantheon-text-muted disabled:opacity-30 transition-colors">← Prev</button>
+                              <span className="font-mono text-xs text-pantheon-text-dim">{safePage + 1} / {totalPages}</span>
+                              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="rounded border border-pantheon-border-hi px-3 py-1 text-xs text-pantheon-text-muted hover:border-pantheon-text-muted disabled:opacity-30 transition-colors">Next →</button>
                             </div>
                           )}
                         </>)}
@@ -2083,12 +2083,12 @@ export default function Page() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-white uppercase tracking-widest">Past Deployments</h3>
+                <History className="w-4 h-4 text-pantheon-text-muted" />
+                <h3 className="text-sm font-semibold text-pantheon-text uppercase tracking-widest">Past Deployments</h3>
               </div>
               <button
                 onClick={() => fetch('/api/deployments').then(r => r.json()).then(setHistory).catch(() => {})}
-                className="flex items-center gap-1.5 text-xs text-white hover:text-pantheon-yellow transition-colors"
+                className="flex items-center gap-1.5 text-xs text-pantheon-text hover:text-pantheon-yellow transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Refresh
@@ -2097,8 +2097,8 @@ export default function Page() {
             {/* Live — in-memory jobs + orphaned Supabase running records */}
             {hasLive && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-yellow-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse inline-block" />
+                <h3 className="text-sm font-semibold text-pantheon-yellow uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-pantheon-yellow animate-pulse inline-block" />
                   Live
                 </h3>
                 {runningJobs.map(job => {
@@ -2130,12 +2130,12 @@ export default function Page() {
                 <div className="space-y-3">
                   {hasLive && pastHistory.length > 0 && (
                     <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-slate-400" />
-                      <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Past</h3>
+                      <Layers className="w-4 h-4 text-pantheon-text-muted" />
+                      <h3 className="text-sm font-semibold text-pantheon-text-muted uppercase tracking-widest">Past</h3>
                     </div>
                   )}
                   {!hasLive && pastHistory.length === 0 && (
-                    <p className="text-sm text-slate-500 text-center py-12">No deployment history yet</p>
+                    <p className="text-sm text-pantheon-text-dim text-center py-12">No deployment history yet</p>
                   )}
                   {paginated.map(item => <HistoryCard key={item.id} item={item} onResume={resumePaused} />)}
                   {totalPages > 1 && (
@@ -2143,13 +2143,13 @@ export default function Page() {
                       <button
                         onClick={() => setHistoryPage(p => Math.max(0, p - 1))}
                         disabled={historyPage === 0}
-                        className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors"
+                        className="rounded border border-pantheon-border-hi px-3 py-1 text-xs text-pantheon-text-muted hover:border-pantheon-text-muted disabled:opacity-30 transition-colors"
                       >← Prev</button>
-                      <span className="font-mono text-xs text-slate-500">{historyPage + 1} / {totalPages}</span>
+                      <span className="font-mono text-xs text-pantheon-text-dim">{historyPage + 1} / {totalPages}</span>
                       <button
                         onClick={() => setHistoryPage(p => Math.min(totalPages - 1, p + 1))}
                         disabled={historyPage >= totalPages - 1}
-                        className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-400 hover:border-slate-400 disabled:opacity-30 transition-colors"
+                        className="rounded border border-pantheon-border-hi px-3 py-1 text-xs text-pantheon-text-muted hover:border-pantheon-text-muted disabled:opacity-30 transition-colors"
                       >Next →</button>
                     </div>
                   )}
