@@ -1030,6 +1030,9 @@ export default function Page() {
   const [editNotes, setEditNotes]   = useState('')
   const [editDest, setEditDest]     = useState('live')
 
+  const [markingDeployedId, setMarkingDeployedId] = useState<string | null>(null)
+  const [deployedAt, setDeployedAt]               = useState('')
+
   const [schedFetchedCreatedDate, setSchedFetchedCreatedDate] = useState<Date | null>(null)
   const [schedDateFetching, setSchedDateFetching]             = useState(false)
   const schedForEdited = useRef(false)
@@ -1489,6 +1492,17 @@ export default function Page() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
+    setSchedules(prev => prev.filter(s => s.id !== id))
+  }
+
+  const confirmMarkDeployed = async (id: string) => {
+    if (!deployedAt) return
+    await fetch('/api/schedule/deployed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, completed_at: new Date(deployedAt + ':00+08:00').toISOString() }),
+    })
+    setMarkingDeployedId(null)
     setSchedules(prev => prev.filter(s => s.id !== id))
   }
 
@@ -1976,6 +1990,7 @@ export default function Page() {
 
             const deployRow = (item: typeof schedules[number], last: boolean) => {
               const isEditing = editingId === item.id
+              const isMarkingDeployed = markingDeployedId === item.id
               return (
                 <div key={item.id} className={`p-4 space-y-2 ${!last ? 'border-b border-pantheon-border/60' : ''}`}>
                   <div className="flex items-start gap-3">
@@ -1984,16 +1999,17 @@ export default function Page() {
                         <span className="font-mono text-sm font-semibold text-pantheon-text">{item.site_name ?? item.site}</span>
                         <span className="text-xs rounded border border-pantheon-yellow/40 text-pantheon-yellow px-1.5 py-0.5 font-mono">{item.source} → {item.destination}</span>
                       </div>
-                      {!isEditing && <p className="font-mono text-xs text-pantheon-text mt-1">
+                      {!isEditing && !isMarkingDeployed && <p className="font-mono text-xs text-pantheon-text mt-1">
                         {new Date(item.scheduled_for).toLocaleString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                         <span className="text-pantheon-text-dim ml-1">(Manila)</span>
                       </p>}
-                      {item.notes && !isEditing && <p className="font-mono text-xs text-pantheon-text-dim mt-0.5">{item.notes}</p>}
+                      {item.notes && !isEditing && !isMarkingDeployed && <p className="font-mono text-xs text-pantheon-text-dim mt-0.5">{item.notes}</p>}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {!isEditing && <>
+                      {!isEditing && !isMarkingDeployed && <>
                         <button onClick={() => runScheduleNow(item)} className="rounded-lg bg-pantheon-yellow hover:bg-pantheon-yellow-dark px-2.5 py-1.5 text-xs font-semibold text-pantheon-bg transition-colors">▶</button>
                         <button onClick={() => { setEditingId(item.id); setEditFor(toManilaDatetimeLocal(item.scheduled_for)); setEditNotes(item.notes ?? ''); setEditDest(item.destination) }} className="rounded border border-pantheon-border-hi px-2.5 py-1 text-xs text-pantheon-text-muted hover:border-pantheon-text-muted transition-colors">✎</button>
+                        <button onClick={() => { setMarkingDeployedId(item.id); setDeployedAt(toManilaDatetimeLocal(new Date().toISOString())) }} title="Customer already deployed this" className="rounded border border-pantheon-success/40 px-2.5 py-1 text-xs text-pantheon-success hover:bg-pantheon-success/10 transition-colors">✓ Deployed</button>
                         <button onClick={() => cancelSchedule(item.id)} className="rounded border border-pantheon-error/40 px-2.5 py-1 text-xs text-pantheon-error hover:bg-pantheon-error/10 transition-colors">✕</button>
                       </>}
                     </div>
@@ -2016,6 +2032,19 @@ export default function Page() {
                       <div className="flex gap-2">
                         <button onClick={() => saveEdit(item.id)} disabled={!editFor} className="flex-1 rounded-lg bg-pantheon-yellow py-2 text-xs font-semibold text-pantheon-bg hover:bg-pantheon-yellow-dark disabled:opacity-40 transition-colors">Save</button>
                         <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs text-pantheon-text-muted hover:text-pantheon-text transition-colors">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                  {isMarkingDeployed && (
+                    <div className="space-y-3 pt-2 border-t border-pantheon-border">
+                      <div className="space-y-1">
+                        <label className="text-xs text-pantheon-text-muted font-mono">Customer deployed at (Manila)</label>
+                        <input type="datetime-local" value={deployedAt} onChange={e => setDeployedAt(e.target.value)} className="w-full rounded border border-pantheon-border-hi bg-pantheon-bg-elevated px-2 py-1.5 font-mono text-xs text-pantheon-text focus:border-pantheon-success focus:outline-none" />
+                      </div>
+                      <p className="font-mono text-xs text-pantheon-text-dim">Records a completed {item.destination} deploy for {item.source} and retires this schedule — no pipeline runs.</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => confirmMarkDeployed(item.id)} disabled={!deployedAt} className="flex-1 rounded-lg bg-pantheon-success py-2 text-xs font-semibold text-pantheon-bg hover:opacity-90 disabled:opacity-40 transition-colors">Confirm</button>
+                        <button onClick={() => setMarkingDeployedId(null)} className="px-4 py-2 text-xs text-pantheon-text-muted hover:text-pantheon-text transition-colors">Cancel</button>
                       </div>
                     </div>
                   )}
