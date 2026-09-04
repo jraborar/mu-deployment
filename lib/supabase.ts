@@ -106,6 +106,46 @@ export async function updateSchedule(id: string, updates: Partial<Pick<ScheduleR
   if (error) console.error('[supabase] updateSchedule:', error.message)
 }
 
+// The customer deployed a booked schedule themselves, outside this app's pipeline.
+// Backfills the deployment_history row consumers like mu-sites rely on to know a
+// site went live, then retires the schedule under its own status — distinct from
+// 'cancelled' — so reporting can still tell "customer beat us to it" apart from an
+// abandoned/skipped deploy.
+export async function markScheduleCustomerDeployed(
+  id: string, completedAt: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const db = getClient()
+  if (!db) return { ok: false, error: 'Supabase not configured' }
+
+  const { data: schedule, error: fetchError } = await db
+    .from('scheduled_deployments')
+    .select('site, site_name, source, destination')
+    .eq('id', id)
+    .single()
+  if (fetchError || !schedule) return { ok: false, error: fetchError?.message ?? 'Schedule not found' }
+
+  const { error: insertError } = await db.from('deployment_history').insert({
+    site: schedule.site,
+    site_name: schedule.site_name,
+    source: schedule.source,
+    destination: schedule.destination,
+    stages_completed: [schedule.destination],
+    status: 'completed',
+    started_at: completedAt,
+    completed_at: completedAt,
+    logs: [],
+  })
+  if (insertError) return { ok: false, error: insertError.message }
+
+  const { error: updateError } = await db
+    .from('scheduled_deployments')
+    .update({ status: 'customer-deployed' })
+    .eq('id', id)
+  if (updateError) return { ok: false, error: updateError.message }
+
+  return { ok: true }
+}
+
 export async function getDeploymentById(id: string): Promise<(DeploymentRecord & { logs?: unknown[] }) | null> {
   const db = getClient()
   if (!db) return null
