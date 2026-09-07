@@ -1,0 +1,59 @@
+name: CI
+
+# The gate this repo did not have. Both other workflows are housekeeping
+# (issue links, reviewer requests) and neither compiles anything, so until now
+# a PR could typecheck-fail or break the production build and still merge
+# green — Railway would be the first thing to notice, after main already had
+# the bad commit. This app books and executes customer deploys, so that is the
+# wrong place to find out.
+#
+# Runs on main too, not just PRs: a merge commit is a tree no PR run ever
+# tested, and a semantic conflict between two independently-green PRs shows up
+# nowhere else.
+#
+# No lint step: this repo has TypeScript but no eslint installed. Adding one is
+# a separate change, because it will surface a pre-existing backlog and a gate
+# that is red on day one gets ignored.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A force-push or a quick second commit supersedes the run in flight. Without
+# this they both finish, and the slower one can report last.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 22 to match the Dockerfile's node:22-bookworm-slim. A gate that builds
+      # on a different major than production is testing the wrong thing.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `ci` not `install`: installs exactly the lockfile, and fails if
+      # package.json and package-lock.json have drifted — itself a bug worth
+      # failing on.
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Deliberately NO env vars. The Dockerfile passes no secret as a build
+      # ARG (its only ARG is TERMINUS_VERSION), and this repo has no
+      # .env.local at all — so the build already runs bare here. If this step
+      # ever starts needing a secret, that is the regression.
+      - name: Build
+        run: npm run build
