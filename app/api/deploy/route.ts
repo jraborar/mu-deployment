@@ -111,6 +111,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const url   = new URL(request.url)
   const jobId = url.searchParams.get('jobId')
   if (!jobId) return Response.json({ error: 'Missing jobId' }, { status: 400 })

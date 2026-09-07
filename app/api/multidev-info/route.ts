@@ -1,4 +1,5 @@
 import { run } from '@/lib/terminus'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
@@ -71,6 +72,9 @@ function findInList(raw: string, source: string): string | null {
 }
 
 export async function GET(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const { searchParams } = new URL(request.url)
   const site   = searchParams.get('site')?.trim()
   const source = searchParams.get('source')?.trim()

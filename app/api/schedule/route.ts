@@ -27,7 +27,10 @@ async function resolveSiteName(site: string): Promise<string | undefined> {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const schedules = await listSchedules()
   return Response.json(schedules)
 }
