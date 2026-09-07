@@ -1,6 +1,7 @@
 import { createSchedule, listSchedules, cancelSchedule, updateSchedule } from '@/lib/supabase'
 import { broadcastMessage, buildScheduledBlocks } from '@/lib/slack'
 import { run } from '@/lib/terminus'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
@@ -32,6 +33,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
 
@@ -53,6 +57,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
   const { id, scheduled_for, notes, destination } = body
@@ -64,6 +71,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const { id } = await request.json().catch(() => ({}))
   if (!id) return Response.json({ error: 'Missing id' }, { status: 400 })
   await cancelSchedule(id)

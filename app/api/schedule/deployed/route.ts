@@ -1,8 +1,12 @@
 import { markScheduleCustomerDeployed } from '@/lib/supabase'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
 

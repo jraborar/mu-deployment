@@ -1,12 +1,16 @@
 import { getJob } from '@/lib/jobStore'
 import { finalizeDeploymentRecord } from '@/lib/supabase'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const { jobId } = await params
   const job = getJob(jobId)
 
