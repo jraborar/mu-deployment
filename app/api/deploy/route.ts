@@ -2,6 +2,7 @@ import { type NextRequest } from 'next/server'
 import { createJob, getJob, type Job } from '@/lib/jobStore'
 import { executeJob } from '@/lib/deployer'
 import { computeStages } from '@/lib/pipeline'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
@@ -81,6 +82,9 @@ function streamJob(job: Job, request: NextRequest): Response {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const body = await request.json().catch(() => null)
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 })
 
