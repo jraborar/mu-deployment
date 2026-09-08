@@ -1,5 +1,6 @@
 import { runDueSchedules } from '@/lib/scheduler'
 import { ensureStarted, isSchedulerStarted } from '@/lib/startup'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
@@ -25,7 +26,10 @@ export async function POST(request: Request) {
 }
 
 // GET — kept so the dev server (and app/page.tsx on load) can force startup.
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   await ensureStarted()
   return Response.json({ started: isSchedulerStarted() })
 }

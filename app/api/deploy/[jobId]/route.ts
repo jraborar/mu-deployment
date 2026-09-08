@@ -1,5 +1,6 @@
 import { type NextRequest } from 'next/server'
 import { getJob, type Job } from '@/lib/jobStore'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
@@ -71,6 +72,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const { jobId } = await params
   const job = getJob(jobId)
   if (!job) return Response.json({ error: 'Job not found' }, { status: 404 })

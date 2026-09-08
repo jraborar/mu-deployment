@@ -1,8 +1,12 @@
 import { getAllJobs } from '@/lib/jobStore'
+import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const jobs = getAllJobs()
     .filter(j => ['running', 'awaiting-approval'].includes(j.status))
     .map(j => ({

@@ -1,3 +1,5 @@
+import { requireCaller } from '@/lib/callerAuth'
+
 export const runtime = 'nodejs'
 
 /**
@@ -13,7 +15,10 @@ export const runtime = 'nodejs'
  * deliberate — a staging outage should not break this app's dashboard — but it
  * would also hide a 401 during the rollout, so log it.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await requireCaller(request)
+  if (denied) return denied
+
   const stagingUrl = process.env.MU_STAGING_URL
   if (!stagingUrl) {
     return Response.json({ error: 'MU_STAGING_URL not configured' }, { status: 503 })
