@@ -3,6 +3,7 @@ import { getAllJobs } from '@/lib/jobStore'
 import { finalizeDeploymentRecord, cleanupStaleRunningRecords, listSchedules } from '@/lib/supabase'
 import { broadcastMessage, buildScheduledBlocks, isSlackConfigured, isPumbleConfigured } from '@/lib/slack'
 import { startSocketMode } from '@/lib/socketMode'
+import { processSingleton } from '@/lib/processSingleton'
 
 /**
  * Process-wide startup, extracted from app/api/cron/trigger/route.ts.
@@ -27,15 +28,24 @@ import { startSocketMode } from '@/lib/socketMode'
  * Both singleton flags stay, so calling this from boot AND from the route is
  * harmless — the route keeps its call as a fallback for the case where
  * instrumentation did not run (the same belt-and-braces the Socket Mode call
- * below already used).
+ * below already used). That belt-and-braces only actually held once the flags
+ * became process-wide: as module-scoped `let`s the two callers were in
+ * different module graphs and neither could see the other's flag, so the
+ * fallback was not a fallback — it was a second startup.
  */
 
-let schedulerStarted = false
-let serverInitDone   = false
+// Process-wide, not module-wide. As plain `let`s these were per module graph,
+// so instrumentation and the route handlers each held their own copy set to
+// false and BOTH started: two scheduler ticks a minute, two serverInit runs,
+// two sets of SIGTERM handlers. See lib/processSingleton.ts.
+const flags = processSingleton('startup.flags', () => ({
+  schedulerStarted: false,
+  serverInitDone:   false,
+}))
 
 export function startScheduler(): void {
-  if (schedulerStarted) return
-  schedulerStarted = true
+  if (flags.schedulerStarted) return
+  flags.schedulerStarted = true
 
   const INTERVAL_MS = 60_000
   async function tick() {
@@ -58,8 +68,8 @@ export function startScheduler(): void {
 }
 
 export async function serverInit(): Promise<void> {
-  if (serverInitDone) return
-  serverInitDone = true
+  if (flags.serverInitDone) return
+  flags.serverInitDone = true
 
   // Startup: mark any orphaned 'running' Supabase records as failed.
   // Safe to run at boot here — STALE_GRACE_HOURS is 6, so a deployment that is
@@ -122,5 +132,5 @@ export async function ensureStarted(): Promise<void> {
 }
 
 export function isSchedulerStarted(): boolean {
-  return schedulerStarted
+  return flags.schedulerStarted
 }
