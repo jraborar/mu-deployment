@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
+import { processSingleton } from '@/lib/processSingleton'
 
 export interface LogEntry {
   type: 'log'
@@ -38,7 +39,12 @@ export interface Job {
 }
 
 const MAX_JOBS = 20
-const store = new Map<string, Job>()
+
+// One store for the whole process. It used to be a bare `new Map()`, which gave
+// the instrumentation graph and the route handlers a Map each: a job created by
+// the scheduler was then invisible to /api/jobs and unapprovable through
+// /api/approve/[jobId]. See lib/processSingleton.ts for the full account.
+const store = processSingleton('jobStore.store', () => new Map<string, Job>())
 
 export function createJob(params: {
   site: string

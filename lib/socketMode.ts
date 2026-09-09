@@ -1,10 +1,16 @@
 import { getJob } from '@/lib/jobStore'
+import { processSingleton } from '@/lib/processSingleton'
 
-let started = false
+// Process-wide, not module-wide: as a plain `let` this guard let instrumentation
+// and the route handlers open a Socket Mode connection each (Railway logs showed
+// SlackWebSocket:4 and :8). Slack hands an interaction to one connection, so an
+// approve button had even odds of arriving in the graph whose job store did not
+// hold the job. See lib/processSingleton.ts.
+const state = processSingleton('slack.socketMode', () => ({ started: false }))
 
 export async function startSocketMode(): Promise<void> {
-  if (started) return
-  started = true
+  if (state.started) return
+  state.started = true
 
   const appToken  = process.env.SLACK_APP_TOKEN
   const botToken  = process.env.SLACK_BOT_TOKEN
@@ -13,7 +19,7 @@ export async function startSocketMode(): Promise<void> {
   if (!appToken || !botToken || !channelId) {
     const missing = ['SLACK_APP_TOKEN', 'SLACK_BOT_TOKEN', 'SLACK_CHANNEL_ID'].filter(k => !process.env[k])
     console.log(`[slack] Socket Mode skipped — missing env var(s): ${missing.join(', ')}`)
-    started = false
+    state.started = false
     return
   }
 
@@ -50,6 +56,6 @@ export async function startSocketMode(): Promise<void> {
     console.log('[slack] Socket Mode client connected')
   } catch (err) {
     console.error('[slack] Failed to start Socket Mode client:', err)
-    started = false
+    state.started = false
   }
 }
