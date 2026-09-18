@@ -4,18 +4,40 @@ import { createJob, getAllJobs } from '@/lib/jobStore'
 import { executeJob } from '@/lib/deployer'
 import { broadcastMessage, buildUpcomingBlocks, buildScheduledBlocks } from '@/lib/slack'
 import { getSite } from '@/lib/sites'
+import { selectStaleJobs } from '@/lib/staleJobs'
 
-const STALE_JOB_MS = 24 * 60 * 60 * 1000
-
+/**
+ * Fails jobs that have gone quiet for a full day.
+ *
+ * Staleness is measured from `lastActivity`, not `startedAt`. Measuring from
+ * creation killed jobs that were doing real work: ApexOrderPickup's mu-260915
+ * deploy sat at the test approval gate for ~23h58m, was approved, and was
+ * pruned two minutes later — mid-snapshot, with two stages still to run.
+ *
+ * Pruning also has to actually STOP the job. Flipping `status` and emitting
+ * 'done' only detaches the listeners; `executeJob` is a running async function
+ * and carried straight on, deploying to test under a record that already said
+ * "failed". Worse, it then parked at the live gate and blocked there forever,
+ * invisible to /api/jobs (which lists only running/awaiting-approval). So this
+ * uses the same abort handshake as the user-facing cancel route: set
+ * `cancelRequested`, then resolve any pending approval so the loop unblocks and
+ * unwinds through `checkCancelled`.
+ */
 async function pruneStaleJobs(): Promise<void> {
   const now = Date.now()
-  const stale = getAllJobs().filter(j =>
-    ['running', 'awaiting-approval'].includes(j.status) &&
-    now - j.startedAt > STALE_JOB_MS
-  )
+  const stale = selectStaleJobs(getAllJobs(), now)
   for (const job of stale) {
+    const idleMin = Math.round((now - job.lastActivity) / 60000)
     job.status = 'failed'
-    const entry = { type: 'log' as const, logType: 'error' as const, message: 'Job automatically failed after 24 hours with no completion', ts: Date.now() }
+    // Marks the record as already finalized here, so the catch block in
+    // executeJob unwinds without overwriting it with 'cancelled' or 'paused'.
+    job.prunedStale = true
+    job.cancelRequested = true
+    if (job.pendingApproval) {
+      job.pendingApproval.resolve(false)
+      job.pendingApproval = null
+    }
+    const entry = { type: 'log' as const, logType: 'error' as const, message: `Job automatically failed after ${idleMin} minutes with no activity`, ts: Date.now() }
     job.logs.push(entry)
     job.emitter.emit('event', entry)
     job.emitter.emit('event', { type: 'complete', status: 'failed' })
@@ -27,7 +49,7 @@ async function pruneStaleJobs(): Promise<void> {
       logs: job.logs,
       site_name: job.site_name,
     })
-    console.log(`[scheduler] Pruned stale job ${job.id} (${job.site} ${job.source} → ${job.destination}, running since ${new Date(job.startedAt).toISOString()})`)
+    console.log(`[scheduler] Pruned stale job ${job.id} (${job.site} ${job.source} → ${job.destination}, idle ${idleMin} min, started ${new Date(job.startedAt).toISOString()})`)
   }
 }
 
