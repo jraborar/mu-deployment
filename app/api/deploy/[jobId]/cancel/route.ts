@@ -1,4 +1,4 @@
-import { getJob } from '@/lib/jobStore'
+import { getJob, isTerminal } from '@/lib/jobStore'
 import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
@@ -14,7 +14,7 @@ export async function POST(
   const job = getJob(jobId)
 
   if (!job) return Response.json({ error: 'Job not found' }, { status: 404 })
-  if (['completed', 'failed', 'paused'].includes(job.status)) {
+  if (isTerminal(job.status)) {
     return Response.json({ error: 'Job already finished' }, { status: 409 })
   }
 

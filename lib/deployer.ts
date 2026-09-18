@@ -373,6 +373,12 @@ export async function executeJob(job: Job): Promise<void> {
         )
         const approved = await waitForApproval(job, gate)
         job.status = 'running'
+        // A cancel — from the cancel route or the stale-job pruner — unblocks the
+        // gate by resolving it as "not approved". Without this check that lands in
+        // the pause branch below and records the job as 'paused', i.e. resumable,
+        // when it was actually cancelled or killed. The `prompt()` helper above
+        // has always checked here; this gate was the one that did not.
+        checkCancelled(job)
         if (!approved) {
           job.status = 'paused'
           const at = job.completedStages[job.completedStages.length - 1] ?? job.source
@@ -489,7 +495,19 @@ export async function executeJob(job: Job): Promise<void> {
       // pauseHere() already finalized the record and emitted done — nothing more to do
       return
     }
+    if (job.prunedStale) {
+      // The scheduler's pruner already logged, emitted done and wrote the 'failed'
+      // record. Unwind quietly: re-finalizing would overwrite it with 'cancelled'
+      // and post a "cancelled by user" notice for something nobody cancelled.
+      job.status = 'failed'
+      return
+    }
     const status = isCancelled ? 'cancelled' : 'failed'
+    // Without this the job stays 'running' in memory after it has finished: it
+    // keeps showing up in /api/jobs, and 24h later the stale-job pruner claims
+    // it and rewrites its history record — turning a clean 'cancelled' into
+    // 'failed' long after the fact.
+    job.status = status
     const message = isCancelled
       ? `Deployment cancelled after ${job.completedStages.length > 0 ? job.completedStages.join(', ') : 'start'}`
       : `Deployment failed: ${err instanceof Error ? err.message : String(err)}`

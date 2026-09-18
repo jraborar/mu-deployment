@@ -18,13 +18,23 @@ export interface Job {
   stages: string[]
   completedStages: string[]
   currentStage: string | null
-  status: 'running' | 'completed' | 'failed' | 'awaiting-approval' | 'paused'
+  // 'cancelled' is terminal and distinct from 'failed' — the history record has
+  // always distinguished them; the in-memory job now does too, so a cancelled
+  // job stops looking in-flight to /api/jobs and to the stale-job pruner.
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'awaiting-approval' | 'paused'
   autoApprove: boolean
   anchorAdvance: boolean   // advance sites.last_deployment on success (managed-cycle deploy only)
   cancelRequested: boolean
+  // Set by the scheduler's stale-job pruner, which has already written the
+  // 'failed' history record itself. It tells executeJob's catch block to unwind
+  // quietly instead of finalizing a second time with a different status.
+  prunedStale: boolean
   label: string
   logs: LogEntry[]
   startedAt: number
+  // Last time this job emitted anything — the staleness clock. NOT startedAt:
+  // a job can legitimately sit at an approval gate for hours and then do real
+  // work, and killing it by age-since-creation cuts that work off mid-deploy.
   lastActivity: number
   emitter: EventEmitter
   pendingApproval: {
@@ -74,6 +84,7 @@ export function createJob(params: {
     autoApprove: params.autoApprove ?? false,
     anchorAdvance: params.anchorAdvance ?? false,
     cancelRequested: false,
+    prunedStale: false,
     label: params.label ?? params.source,
     logs: [],
     startedAt: Date.now(),
@@ -85,6 +96,14 @@ export function createJob(params: {
   job.emitter.setMaxListeners(20)
   store.set(job.id, job)
   return job
+}
+
+/** Statuses a job never leaves. Kept in one place so a new terminal state can
+ *  never again be added to the union without the routes that gate on it. */
+export const TERMINAL_STATUSES: readonly Job['status'][] = ['completed', 'failed', 'cancelled', 'paused']
+
+export function isTerminal(status: Job['status']): boolean {
+  return TERMINAL_STATUSES.includes(status)
 }
 
 export function getJob(id: string): Job | undefined {

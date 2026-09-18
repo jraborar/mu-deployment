@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server'
-import { createJob, getJob, type Job } from '@/lib/jobStore'
+import { createJob, getJob, isTerminal, type Job } from '@/lib/jobStore'
 import { executeJob } from '@/lib/deployer'
 import { computeStages } from '@/lib/pipeline'
 import { requireCaller } from '@/lib/callerAuth'
@@ -33,7 +33,7 @@ function streamJob(job: Job, request: NextRequest): Response {
 
       for (const entry of job.logs) send(entry)
 
-      if (['completed', 'failed', 'paused'].includes(job.status)) {
+      if (isTerminal(job.status)) {
         send({ type: 'complete', status: job.status })
         controller.close()
         return

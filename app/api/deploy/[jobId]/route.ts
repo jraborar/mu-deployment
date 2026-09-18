@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server'
-import { getJob, type Job } from '@/lib/jobStore'
+import { getJob, isTerminal, type Job } from '@/lib/jobStore'
 import { requireCaller } from '@/lib/callerAuth'
 
 export const runtime = 'nodejs'
@@ -27,7 +27,7 @@ function streamJob(job: Job, request: NextRequest): Response {
 
       for (const entry of job.logs) send(entry)
 
-      if (['completed', 'failed', 'paused'].includes(job.status)) {
+      if (isTerminal(job.status)) {
         send({ type: 'complete', status: job.status })
         controller.close()
         return
